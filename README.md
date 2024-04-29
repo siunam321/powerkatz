@@ -50,7 +50,7 @@ After that, you can execute the following Bash command to start the Powerkatz ap
 
 ## 🎬 Demonstration
 
-https://github.com/siunam321/IVE-HD-FYP-Group07/assets/104430134/026d36fa-7f16-4918-8920-42ea8fdc1d09
+https://github.com/siunam321/powerkatz/assets/104430134/65701c75-5a53-438f-8d1a-73a534ad56e4
 
 ## 🎯 Todo
 
