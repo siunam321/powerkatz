@@ -1,0 +1,1 @@
+This directory holds all the password hashes and Kerberos tickets.

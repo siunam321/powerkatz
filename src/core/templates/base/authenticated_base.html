@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+
+  <title>Powerkatz &mdash; {{ title }}</title>
+
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png">
+  <link rel="manifest" href="/static/img/site.webmanifest">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.gstatic.com" rel="preconnect">
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
+
+  <!-- Vendor CSS Files -->
+  <link href="/static/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/static/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- Template Main CSS File -->
+  <link href="/static/css/style.css" rel="stylesheet">
+  <link href="/static/css/main.css" rel="stylesheet">
+
+  <!-- code highlight via highlight.js -->
+  <link rel="stylesheet" href="/static/vendor/highlightjs/css/default.min.css">
+
+  <!-- jQuery -->
+  <script src="/static/vendor/jquery/jquery.min.js"></script>
+
+  <!-- jquery.terminal -->
+  <script src="/static/vendor/jquery-terminal/js/jquery.terminal.min.js"></script>
+  <link rel="stylesheet" href="/static/vendor/jquery-terminal/css/jquery.terminal.min.css"/>
+</head>
+<body>
+  <!-- start of header -->
+  <header id="header" class="header fixed-top d-flex align-items-center">
+    <div class="d-flex align-items-center justify-content-between">
+      <i class="bi bi-list toggle-sidebar-btn me-3"></i>
+      <a href="/" class="logo d-flex align-items-center link-underline link-underline-opacity-0">
+        <span class="d-none d-lg-block">Powerkatz</span>
+        <img class="ms-3 img-fluid rounded d-none d-lg-block" src="/static/img/Powerkatz_logo_alt.png">
+      </a>
+    </div>
+  </header>
+  <!-- end of header -->
+
+  <!-- start of sidebar -->
+  <aside id="sidebar" class="sidebar">
+    <ul class="sidebar-nav" id="sidebar-nav">
+      <!-- start of "Dashboard" nav -->
+      <li class="nav-item">
+        <a class="nav-link" href="/">
+          <i class="bi bi-grid"></i><span>Dashboard</span>
+        </a>
+      </li>
+      <!-- end of "Dashboard" nav -->
+      <!-- start of "Powerkatz Server Listener" nav -->
+      <li class="nav-item">
+        <a class="nav-link collapsed" href="/powerkatz-server-listener">
+          <i class="bi bi-menu-button-wide"></i><span>Powerkatz Server Listener</span></i>
+        </a>
+      </li>
+      <!-- end of "Powerkatz Server Listener" nav -->
+      <!-- start of "Controller" nav -->
+      <li class="nav-item">
+        <a class="nav-link collapsed" href="/executor">
+          <i class="bi bi-command"></i><span>Executor</span></i>
+        </a>
+      </li>
+      <!-- end of "Controller" nav -->
+      <!-- start of "History" nav -->
+      <li class="nav-item">
+        <a class="nav-link collapsed" href="/history">
+          <i class="bi bi-clock-history"></i><span>History</span>
+        </a>
+      </li>
+      <!-- end of "History" nav -->
+      <!-- start of "Settings" nav -->
+      <li class="nav-item">
+        <a class="nav-link collapsed" href="/settings">
+          <i class="bi bi-gear"></i><span>Settings</span>
+        </a>
+      </li>
+      <!-- end of "Settings" nav -->
+    </ul>
+  </aside>
+  <!-- end of sidebar-->
+
+  <!-- start of main content -->
+  <main id="main" class="main">
+    <!-- start of page title -->
+    <div class="pagetitle">
+      <h1>{{ title }}</h1>
+      <nav>
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="/" class="link-underline link-underline-opacity-0">Powerkatz</a></li>
+          <li class="breadcrumb-item active">{{ title }}</li>
+        </ol>
+      </nav>
+    </div>
+    <!-- end of page title -->
+
+    <!-- start of section -->
+    <section class="section">
+      <div class="row">
+        {% if splitInHalf %}
+          <div class="col-lg-6">
+        {% else %}
+          <div class="col-lg-12">
+        {% endif %}
+          <div class="card h-100">
+            <div class="card-body">
+              {% block main %}
+              {% endblock %}
+            </div>
+          </div>
+        </div>
+        {% block rightColumn %}
+        {% endblock %}
+      </div>
+    </section>
+    <!-- start of section -->
+  </main>
+  <!-- end of main content -->
+
+  <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
+
+  <!-- start of toasts notification -->
+  <div class="position-relative">
+    <div id="toastContainer" class="toast-container position-fixed p-3 top-0 end-0">
+
+      <div id="succeedToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header text-bg-success">
+          <i class="bi bi-check-circle me-2"></i>
+          <strong class="me-auto">Powerkatz &mdash; Notification</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <span class="badge rounded-pill text-bg-success ms-2 mt-2 mb-0">Status: Succeed</span>
+        <div class="toast-body"></div>
+      </div>
+
+      <div id="failedToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header text-bg-danger">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          <strong class="me-auto">Powerkatz &mdash; Notification</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <span class="badge rounded-pill text-bg-danger ms-2 mt-2 mb-0">Status: Failed</span>
+        <div class="toast-body"></div>
+      </div>
+
+      <div id="pendingToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header text-bg-info">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong class="me-auto">Powerkatz &mdash; Notification</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <span class="badge rounded-pill text-bg-info ms-2 mt-2 mb-0">Status: Pending</span>
+        <div class="toast-body"></div>
+      </div>
+
+    </div>
+  </div>
+  <!-- end of toasts notification -->
+
+  <!-- Vendor JS Files -->
+  <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Template Main JS File -->
+  <script src="/static/js/main_frontend.js"></script>
+  <script type="text/javascript">createCopyButtonOnCodeBlocks();</script>
+
+  <!-- code highlight via highlight.js -->
+  <script src="/static/vendor/highlightjs/js/highlight.min.js"></script>
+  <script src="/static/vendor/highlightjs/js/powershell.min.js"></script>
+  <script type="text/javascript">hljs.highlightAll();</script>
+
+  <script src="/static/js/main.js"></script>
+  <script src="/static/js/sendCommand.js"></script>
+</body>
+</html>

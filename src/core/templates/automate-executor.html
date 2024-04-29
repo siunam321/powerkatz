@@ -1,0 +1,240 @@
+{% extends 'base/unauthenticated_base.html' %}
+{% block main %}
+<!-- success message -->
+<div id="succeed" class="mt-4 alert alert-success text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="succeedAlertHeading"></h4>
+  <p class="mb-0" id="succeedAlertPTag"></p>
+</div>
+<!-- failed message -->
+<div id="error" class="mt-4 alert alert-danger text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="failedAlertHeading"></h4>
+  <p class="mb-0" id="failedAlertPTag"></p>
+</div>
+<!-- pending message -->
+<div id="pending" class="mt-4 alert alert-info text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="pendingAlertHeading"></h4>
+  <p class="mb-0" id="pendingAlertPTag"></p>
+</div>
+
+<h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Automatically Executing Attack Function(s)</b></h4>
+<p>
+  To reduce the heavy lifting required to dump credentials on the target machine(s), the application will automatically perform the job for you.
+  <br>
+  The status of the automatically executing attack function(s) can be seen below:
+</p>
+
+<!-- start of automate executor status -->
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead class="table-info">
+      <tr>
+        <th scope="col" class="col-4 text-center" style="vertical-align: top;">Attack Function/Enumerator</th>
+        <th scope="col" class="col-4 text-center" style="vertical-align: top;">Status</th>
+        <th scope="col" class="col-4 text-center" style="vertical-align: top;">Status Reason</th>
+      </tr>
+    </thead>
+    <tbody id="automateExecutorTableBody"></tbody>
+  </table>
+</div>
+<!-- end of automate executor status -->
+
+<script>
+const errorAlert = document.getElementById("error");
+const errorAlertHeading = document.getElementById("failedAlertHeading");
+const errorAlertPTag = document.getElementById("failedAlertPTag");
+const succeedAlert = document.getElementById("succeed");
+const succeedAlertHeading = document.getElementById("succeedAlertHeading");
+const succeedAlertPTag = document.getElementById("succeedAlertPTag");
+const pendingAlert = document.getElementById("pending");
+const pendingAlertHeading = document.getElementById("pendingAlertHeading");
+const pendingAlertPTag = document.getElementById("pendingAlertPTag");
+
+window.addEventListener('DOMContentLoaded', async function() {
+  await automateExecutor();
+});
+
+function createPendingResult(attackFunctionName) {
+  const automateExecutorTableBody = document.getElementById("automateExecutorTableBody");
+
+  var newTableRow = document.createElement("tr");
+  var newTableData1 = document.createElement("td");
+  newTableData1.innerText = attackFunctionName;
+  newTableRow.appendChild(newTableData1);
+  newTableRow.setAttribute("class", "table-info");
+  newTableRow.setAttribute("id", `${attackFunctionName}-tr`);
+
+  var newTableData2 = document.createElement("td");
+  newTableData2.setAttribute("id", `${attackFunctionName}-status`);
+  newTableData2.innerText = "Pending";
+  newTableRow.appendChild(newTableData2);
+
+  var newTableData3 = document.createElement("td");
+  newTableData3.setAttribute("id", `${attackFunctionName}-statusReason`);
+  newTableData3.innerText = "This attack function/Enumerator is executing. Please wait...";
+  newTableRow.appendChild(newTableData3);
+
+  automateExecutorTableBody.appendChild(newTableRow);
+}
+
+function updateResult(attackFunctionName, automateExecutorResult) {
+  var statusTableData = document.getElementById(`${attackFunctionName}-status`);
+  var statusReasonTableData = document.getElementById(`${attackFunctionName}-statusReason`);
+  var attackFunctionTableRow = document.getElementById(`${attackFunctionName}-tr`);
+
+  var status = automateExecutorResult["status"];
+  statusTableData.innerText = status;
+
+  statusReasonTableData.innerText = automateExecutorResult["message"];
+
+  if (status === "Failed") {
+    attackFunctionTableRow.setAttribute("class", "table-danger");
+  } else if (status === "Succeed") {
+    attackFunctionTableRow.setAttribute("class", "table-success");
+  } else {
+    attackFunctionTableRow.setAttribute("class", "table-warning");
+  }
+}
+
+async function automateExecutor() {
+  // Enumerator
+  var attackFunctionName = "Collect target(s)' information (Enumerator)";
+  createPendingResult(attackFunctionName);
+
+  var automateExecutorEnumerateResponse = await fetch("/api/automateExecutorEnumerate");
+  var automateExecutorEnumerateResult = await automateExecutorEnumerateResponse.json();
+  if (automateExecutorEnumerateResult["status"] === "Failed") {
+    succeedAlert.style.display = "none";
+    succeedAlertHeading.innerText = "";
+    succeedAlertPTag.innerText = "";
+    errorAlert.style.display = "";
+    errorAlertHeading.innerText = `Status: ${automateExecutorEnumerateResult["status"]}`;
+    errorAlertPTag.innerText = automateExecutorEnumerateResult["message"];
+    createToast(automateExecutorEnumerateResult["status"], automateExecutorEnumerateResult["message"]);
+    pendingAlert.style.display = "none";
+    pendingAlertHeading.innerText = "";
+    pendingAlertPTag.innerText = "";
+  }
+  
+  updateResult(attackFunctionName, automateExecutorEnumerateResult);
+
+  // get domain computers
+  attackFunctionName = "Retrieve target(s)' domain computers (Enumerator)";
+  createPendingResult(attackFunctionName);
+
+  var automateExecutorGetDomainComputersResponse = await fetch("/api/automateExecutorGetDomainComputers");
+  var automateExecutorGetDomainComputersResult = await automateExecutorGetDomainComputersResponse.json();
+  if (automateExecutorGetDomainComputersResult["status"] === "Failed") {
+    succeedAlert.style.display = "none";
+    succeedAlertHeading.innerText = "";
+    succeedAlertPTag.innerText = "";
+    errorAlert.style.display = "";
+    errorAlertHeading.innerText = `Status: ${automateExecutorGetDomainComputersResult["status"]}`;
+    errorAlertPTag.innerText = automateExecutorGetDomainComputersResult["message"];
+    createToast(automateExecutorGetDomainComputersResult["status"], automateExecutorGetDomainComputersResult["message"]);
+    pendingAlert.style.display = "none";
+    pendingAlertHeading.innerText = "";
+    pendingAlertPTag.innerText = "";
+  }
+
+  updateResult(attackFunctionName, automateExecutorGetDomainComputersResult);
+
+  var domainJoinedComputers = automateExecutorGetDomainComputersResult["domainJoinedComputers"];
+  var hasMultipleSubnets = automateExecutorGetDomainComputersResult["hasMultipleSubnets"];
+
+  // credential dumping
+  attackFunctionName = "Dump Recently Logged on Accounts' Password (Mimikatz sekurlsa::logonpasswords)";
+  createPendingResult(attackFunctionName);
+
+  var automateExecutorCredentialDumpingResponse = await fetch("/api/automateExecutorCredentialDumping");
+  var automateExecutorCredentialDumpingResult = await automateExecutorCredentialDumpingResponse.json();
+  if (automateExecutorCredentialDumpingResult["status"] === "Failed") {
+    succeedAlert.style.display = "none";
+    succeedAlertHeading.innerText = "";
+    succeedAlertPTag.innerText = "";
+    errorAlert.style.display = "";
+    errorAlertHeading.innerText = `Status: ${automateExecutorCredentialDumpingResult["status"]}`;
+    errorAlertPTag.innerText = automateExecutorCredentialDumpingResult["message"];
+    createToast(automateExecutorCredentialDumpingResult["status"], automateExecutorCredentialDumpingResult["message"]);
+    pendingAlert.style.display = "none";
+    pendingAlertHeading.innerText = "";
+    pendingAlertPTag.innerText = "";
+  }
+
+  updateResult(attackFunctionName, automateExecutorCredentialDumpingResult);
+
+  // if no domain joined computers, redirect to the dashboard
+  if (!domainJoinedComputers) {
+    errorAlert.style.display = "none";
+    errorAlertHeading.innerText = "";
+    errorAlertPTag.innerText = "";
+    pendingAlert.style.display = "none";
+    pendingAlertHeading.innerText = "";
+    pendingAlertPTag.innerText = "";
+    succeedAlertHeading.innerText = "Status: Succeed";;
+    succeedAlertPTag.innerText = "All attack functions and Enumerator have been executed successfully! Redirecting to the \"Dashboard\" page in 3 seconds...";
+    succeedAlert.style.display = "";
+    createToast("Succeed", "All attack functions and Enumerator have been executed successfully! Redirecting to the \"Dashboard\" page in 3 seconds...");
+    await sleep(3000);
+    document.location = "/?isFromInitialSetup=1";
+    return;
+  }
+
+  // if there's more than 1 subnet, setup tunneling for lateral movement via Ligolo-ng
+  if (hasMultipleSubnets) {
+    attackFunctionName = "Setup tunneling for lateral movement via Ligolo-ng";
+    createPendingResult(attackFunctionName);
+
+    var automateExecutorSetupTunnelingResponse = await fetch("/api/automateExecutorSetupTunneling");
+    var automateExecutorSetupTunnelingResult = await automateExecutorSetupTunnelingResponse.json();
+    if (automateExecutorSetupTunnelingResult["status"] === "Failed") {
+      succeedAlert.style.display = "none";
+      succeedAlertHeading.innerText = "";
+      succeedAlertPTag.innerText = "";
+      errorAlert.style.display = "";
+      errorAlertHeading.innerText = `Status: ${automateExecutorSetupTunnelingResult["status"]}`;
+      errorAlertPTag.innerText = automateExecutorSetupTunnelingResult["message"];
+      createToast(automateExecutorSetupTunnelingResult["status"], automateExecutorSetupTunnelingResult["message"]);
+      pendingAlert.style.display = "none";
+      pendingAlertHeading.innerText = "";
+      pendingAlertPTag.innerText = "";
+    }
+
+    updateResult(attackFunctionName, automateExecutorSetupTunnelingResult);
+  }
+
+  // Keberoasting
+  attackFunctionName = "Extract & Crack Service Accounts' Password (Kerberoasting)";
+  createPendingResult(attackFunctionName);
+
+  var automateExecutorKeberoastingResponse = await fetch("/api/automateExecutorKeberoasting");
+  var automateExecutorKeberoastingResult = await automateExecutorKeberoastingResponse.json();
+  if (automateExecutorKeberoastingResult["status"] === "Failed") {
+    succeedAlert.style.display = "none";
+    succeedAlertHeading.innerText = "";
+    succeedAlertPTag.innerText = "";
+    errorAlert.style.display = "";
+    errorAlertHeading.innerText = `Status: ${automateExecutorKeberoastingResult["status"]}`;
+    errorAlertPTag.innerText = automateExecutorKeberoastingResult["message"];
+    createToast(automateExecutorKeberoastingResult["status"], automateExecutorKeberoastingResult["message"]);
+    pendingAlert.style.display = "none";
+    pendingAlertHeading.innerText = "";
+    pendingAlertPTag.innerText = "";
+  }
+
+  updateResult(attackFunctionName, automateExecutorKeberoastingResult);
+
+  errorAlert.style.display = "none";
+  errorAlertHeading.innerText = "";
+  errorAlertPTag.innerText = "";
+  pendingAlert.style.display = "none";
+  pendingAlertHeading.innerText = "";
+  pendingAlertPTag.innerText = "";
+  succeedAlertHeading.innerText = "Status: Succeed";
+  succeedAlertPTag.innerText = "All attack functions and Enumerator have been executed successfully! Redirecting to the \"Dashboard\" page in 3 seconds...";
+  succeedAlert.style.display = "";
+  createToast("Succeed", "All attack functions and Enumerator have been executed successfully! Redirecting to the \"Dashboard\" page in 3 seconds...");
+  await sleep(3000);
+  document.location = "/?isFromInitialSetup=1";
+}
+</script>
+{% endblock %}

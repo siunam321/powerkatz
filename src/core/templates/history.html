@@ -1,0 +1,150 @@
+{% extends 'base/authenticated_base.html' %}
+{% block main %}
+<!-- start of "Recently Executed Command(s)" -->
+<div class="text-end mt-3">
+  <a href="/api/exportAllHistory" target="_blank"><button type="button" class="btn btn-primary btn-sm me-3">Export All Histories</button></a>
+  <a href="javascript:void(0)"><button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importHistoryModal">Import History(ies)</button></a>
+</div>
+
+<h5 class="card-title">Select a Domain:</h5>
+<select class="form-select mb-3" onchange="displayTargetDomainDetails()" name="selectedTargetDomainDetailsDomainName" id="targetDomainDetailsDomainNameDropdown">
+  <option value="none" selected disabled hidden>Select a Domain</option>
+  {% for domain in issuedCommandsDomain %}
+    {% if loop.index0 == 0 %}
+      <option value="{{ domain }}" selected>Domain: {{ domain }}</option>
+    {% else %}
+      <option value="{{ domain }}">Domain: {{ domain }}</option>
+    {% endif %}
+  {% endfor %}
+</select>
+<div class="my-4 border border-danger border-1"></div>
+
+<h4 class="pb-2 mb-4 text-danger border-bottom border-danger"><b>Recently Executed Attack Function(s)</b></h4>
+<div class="table-responsive">
+  <table class="table table-bordered">
+    <thead class="table-info">
+      <tr>
+        <th scope="col" class="col-1 text-center" style="vertical-align: top;">ID</th>
+        <th scope="col" class="col-2 text-center" style="vertical-align: top;">Execution Timestamp<br>(Day/Month/Year)</th>
+        <th scope="col" class="col-1 text-center" style="vertical-align: top;">Execution Status</th>
+        <th scope="col" class="col-4 text-center" style="vertical-align: top;">Executed Attack Function</th>
+        <th scope="col" class="col-1 text-center" style="vertical-align: top;">Executed on Target IP Address</th>
+        <th scope="col" class="col-3 text-center" style="vertical-align: top;">Actions</th>
+      </tr>
+    </thead>
+    {% for domain in issuedCommandsDomain %}
+      <tbody name="targetDomainTableBody" data-targetDomainName="{{ domain }}">
+        {% for key, value in issuedCommands|dictsort(reverse=true) %}
+          {% if value['domain'] == domain %}
+            {% if value['status'] == 'Succeed' %}
+              <tr class="table-success">
+            {% elif value['status'] == 'Failed' %}
+              <tr class="table-danger">
+            {% else %}
+              <tr class="table-warning">
+            {% endif %}
+              <td>{{ key }}</td>
+              <td>{{ value['timestamp'] }}</td>
+              <td>{{ value['status'] }}</td>
+              <td>{{ value['executedFunction'] }}</td>
+              <td>{{ value['targetIpAddress'] }}</td>
+              <td>
+                <div class="input-group">
+                  <a href="javascript:void(0)" class="me-3"><button type="button" class="btn btn-primary mb-0 form-control" data-bs-toggle="modal" data-bs-target="#historyModal-{{ key }}">View History Details</button></a>
+                  <a href="/api/exportHistory/{{ key }}" target="_blank"><button type="button" class="btn btn-primary form-control">Export This History</button></a>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    {% endfor %}
+  </table>
+</div>
+<!-- end of "Recently Executed Command(s)" -->
+
+<!-- start of history modal -->
+{% for key, value in issuedCommands|dictsort(reverse=true) %}
+  <div class="modal fade modal-lg" id="historyModal-{{ key }}" tabindex="-1">
+    <div class="modal-dialog" id="historyModalDialog">
+      <div class="modal-content">
+        <div class="modal-header" id="historyModalHeader">
+          <h5 class="card-title" id="historyModalTitle">ID #{{ key }} Executed Attack Function</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="historyModalBody">
+          <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Executed Mimikatz Command</b></h4>
+          <pre class="code"><code class="powershell">{{ value['command'] }}</code></pre>
+          <h4 class="pb-2 my-4 text-danger border-bottom border-danger"><b>Result</b></h4>
+          <pre>{{ value['executedCommandResult'] }}</pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+<!-- end of history modal -->
+
+<!-- start of import settings modal -->
+<div class="modal fade" id="importHistoryModal" tabindex="-1">
+  <div class="modal-dialog" id="importHistoryModalDialog">
+    <div class="modal-content">
+      <div class="modal-header" id="importHistoryModalHeader">
+        <h5 class="card-title" id="importHistoryModalTitle">Import History(ies)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="importHistoryModalBody">
+        <!-- success message -->
+        <div id="succeedModal" class="mt-3 alert alert-success text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="succeedAlertHeadingModal"></h4>
+          <p class="mb-0" id="succeedAlertPTagModal"></p>
+        </div>
+        <!-- failed message -->
+        <div id="errorModal" class="mt-3 alert alert-danger text-center pt-3 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="failedAlertHeadingModal"></h4>
+          <p class="mb-0" id="failedAlertPTagModal"></p>
+        </div>
+        <!-- pending message -->
+        <div id="pendingModal" class="mt-4 alert alert-info text-center pt-2 w-100 align-self-center" role="alert" style="display: none;">
+          <h4 class="alert-heading" id="pendingAlertHeadingModal"></h4>
+          <p class="mb-0" id="pendingAlertPTagModal"></p>
+        </div>
+
+        <h5 class="card-title" id="importSettingsModalTitle">Select History JSON File(s):</h5>
+        <div class="input-group">
+          <input type="file" class="form-control" id="importHistoryFileInput" aria-describedby="importHistorySubmitButton" aria-label="Upload" accept=".json,application/json" multiple>
+          <button class="btn btn-success" type="button" id="importHistorySubmitButton" onclick="importHistories(this)">Submit</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- end of import settings modal -->
+
+<script>
+window.addEventListener('DOMContentLoaded', function() {
+  displayTargetDomainDetails();
+});
+
+function displayTargetDomainDetails() {
+  var targetDomainTableBody = document.querySelectorAll('tbody[name="targetDomainTableBody"]');
+  var selectedTargetDomainDetailsDomainName = document.getElementById("targetDomainDetailsDomainNameDropdown").value;
+  if (selectedTargetDomainDetailsDomainName === "none") {
+    return;
+  }
+
+  targetDomainTableBody.forEach((tableBody) => {
+    if (selectedTargetDomainDetailsDomainName === tableBody.dataset.targetdomainname) {
+      tableBody.style.display = "";
+    } else {
+      tableBody.style.display = "none";
+    }
+  });
+};
+</script>
+{% endblock %}
